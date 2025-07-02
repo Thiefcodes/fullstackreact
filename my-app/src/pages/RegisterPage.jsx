@@ -5,11 +5,28 @@ const RegisterPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleRegister = (e) => {
-    e.preventDefault();
-    // Example: handle registration logic
-    console.log('Registering:', username, password);
-  };
+  const handleRegister = async (e) => {
+  e.preventDefault();
+  try {
+    const res = await fetch('http://localhost:5000/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (res.ok) {
+      alert('Registered!');
+      setUsername('');
+      setPassword('');
+    } else {
+      const errorText = await res.text();
+      alert('Failed: ' + errorText);
+    }
+  } catch (error) {
+    alert('Error: ' + error.message);
+  }
+};
+
 
   return (
     <div>
