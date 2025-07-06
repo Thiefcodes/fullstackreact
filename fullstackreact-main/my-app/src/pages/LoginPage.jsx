@@ -24,11 +24,13 @@ const LoginPage = () => {
       const data = await res.json();
       // Save user info to localStorage or context as needed
       if (data.type === 'User') {
-        navigate('/profile');
-      } else if (data.type === 'staff') {
-        // Change this to your staff page path!
-        navigate('/staffdashboard');
-      }
+  // Save username to localStorage for future use
+  localStorage.setItem('username', data.username);
+  navigate('/profile');
+} else if (data.type === 'staff') {
+  localStorage.setItem('username', data.username);
+  navigate('/staffdashboard');
+}
     } catch (err) {
       setError('Error logging in');
     }

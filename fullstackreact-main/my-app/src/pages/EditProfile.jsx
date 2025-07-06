@@ -1,16 +1,60 @@
-import React, { useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const EditProfile = () => {
-  const [profilePicFile, setProfilePicFile] = useState(null); // Stores the selected file
-  const [profilePicPreview, setProfilePicPreview] = useState(''); // For preview URL
+  const navigate = useNavigate();
+  const username = localStorage.getItem('username') || '';
+  const [form, setForm] = useState({
+    username: username,
+    firstname: '',
+    lastname: '',
+    phone: '',
+    address: '',
+    country: '',
+    profilepic: '',
+    email: '',
+  });
+  const [profilePicPreview, setProfilePicPreview] = useState('https://ui-avatars.com/api/?name=User');
+  const [profilePicFile, setProfilePicFile] = useState(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const fileInputRef = useRef();
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
-  const [country, setCountry] = useState('');
+  // Fetch user data on mount
+  useEffect(() => {
+    async function fetchUserData() {
+      if (!username) return;
+      try {
+        const res = await fetch(`http://localhost:5000/api/users?username=${username}`);
+        if (res.ok) {
+          const user = await res.json();
+          if (user) {
+            setForm({
+              ...user,
+              username: user.username,
+              firstname: user.firstname || '',
+              lastname: user.lastname || '',
+              phone: user.phone || '',
+              address: user.address || '',
+              country: user.country || '',
+              profilepic: user.profilepic || '',
+              email: user.email || '',
+            });
+            setProfilePicPreview(user.profilepic || 'https://ui-avatars.com/api/?name=User');
+          }
+        }
+      } catch {
+        // handle error if needed
+      }
+    }
+    fetchUserData();
+  }, [username]);
 
-  // Called when the file input changes
+  const handleChange = e => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
+
   const handleProfilePicChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -19,91 +63,91 @@ const EditProfile = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleAvatarClick = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleSubmit = async e => {
     e.preventDefault();
-    // For now, just alert and log the fields
-    alert('Profile updated! (Demo - not saving to backend yet)');
-    // TODO: Send the file and other info to your backend
+    setError('');
+    setSuccess('');
+
+    let profilepicUrl = form.profilepic;
+    if (profilePicFile) {
+      const data = new FormData();
+data.append('username', form.username); // Make sure this is FIRST
+data.append('file', profilePicFile);
+      try {
+        const res = await fetch('http://localhost:5000/api/uploadprofilepic', {
+          method: 'POST',
+          body: data,
+        });
+        if (!res.ok) {
+          setError('Failed to upload profile picture');
+          return;
+        }
+        const result = await res.json();
+        profilepicUrl = result.url;
+      } catch {
+        setError('Profile pic upload error');
+        return;
+      }
+    }
+
+    try {
+      const res = await fetch('http://localhost:5000/api/updateprofile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, profilepic: profilepicUrl }),
+      });
+      if (!res.ok) {
+        setError(await res.text());
+        return;
+      }
+      setSuccess('Profile updated!');
+      setTimeout(() => navigate('/profile'), 1200);
+    } catch {
+      setError('Failed to update profile');
+    }
   };
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '80vh'
-    }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '80vh' }}>
       <h2>Edit Profile</h2>
-      <form
-        style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 300, gap: 20
-        }}
-        onSubmit={handleSubmit}
-        encType="multipart/form-data"
-      >
+      <form onSubmit={handleSubmit} style={{ minWidth: 300, gap: 20, display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <img
-            src={profilePicPreview || 'https://ui-avatars.com/api/?name=User&background=random'}
+            src={profilePicPreview}
             alt="Profile"
-            style={{
-              width: 100, height: 100, borderRadius: '50%', marginBottom: 10, objectFit: 'cover'
-            }}
+            style={{ width: 110, height: 110, borderRadius: '50%', objectFit: 'cover', cursor: 'pointer', marginBottom: 8 }}
+            onClick={handleAvatarClick}
+            title="Click to change profile picture"
           />
           <input
             type="file"
             accept="image/*"
+            style={{ display: 'none' }}
+            ref={fileInputRef}
             onChange={handleProfilePicChange}
-            style={{ width: 220 }}
           />
         </div>
-        <input
-          type="text"
-          placeholder="First Name"
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-          style={{ width: 220 }}
-        />
-        <input
-          type="text"
-          placeholder="Last Name"
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-          style={{ width: 220 }}
-        />
-        <input
-          type="text"
-          placeholder="Phone Number"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          style={{ width: 220 }}
-        />
-        <input
-          type="text"
-          placeholder="Address"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          style={{ width: 220 }}
-        />
-        <input
-          type="text"
-          placeholder="Country"
-          value={country}
-          onChange={(e) => setCountry(e.target.value)}
-          style={{ width: 220 }}
-        />
-        <button
-          type="submit"
-          style={{
-            marginTop: 12,
-            padding: '10px 26px',
-            fontSize: 16,
-            borderRadius: 8,
-            background: '#5a67d8',
-            color: '#fff',
-            border: 'none',
-            cursor: 'pointer'
-          }}
-        >
-          Save Changes
-        </button>
+        <input name="firstname" value={form.firstname} onChange={handleChange} placeholder="First Name" required />
+        <input name="lastname" value={form.lastname} onChange={handleChange} placeholder="Last Name" required />
+        <input name="phone" value={form.phone} onChange={handleChange} placeholder="Phone" required />
+        <input name="address" value={form.address} onChange={handleChange} placeholder="Address" required />
+        <input name="country" value={form.country} onChange={handleChange} placeholder="Country" required />
+        <input name="email" type="email" value={form.email} onChange={handleChange} placeholder="Email" required />
+        <button type="submit">Save Changes</button>
       </form>
+      {error && <div style={{color:'red'}}>{error}</div>}
+      {success && <div style={{color:'green'}}>{success}</div>}
+      <button
+  style={{ marginTop: 16, background: '#faf089', borderRadius: 6, padding: '6px 20px' }}
+  onClick={() => navigate('/changepassword')}
+>
+  Change Password
+</button>
+
     </div>
   );
 };
