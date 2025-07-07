@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import MixAndMatchModal from './MixAndMatchModal';
 
 const UserProfile = () => {
   const username = localStorage.getItem('username') || '';
   const [user, setUser] = useState(null);
+  const [showMixModal, setShowMixModal] = useState(false);
 
   useEffect(() => {
     async function fetchUser() {
@@ -15,15 +17,22 @@ const UserProfile = () => {
     fetchUser();
   }, [username]);
 
+  // Handler for receiving Mix & Match modal filters
+  const handleMixSubmit = (filters) => {
+    // TODO: Send filters to backend/AI for recommendations
+    console.log('Mix & Match submitted:', filters);
+    // Example: fetch('/api/mixmatch', { method: 'POST', ... });
+  };
+
   if (!user) return <div>Loading...</div>;
 
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', minHeight: '80vh'
+      justifyContent: 'center', minHeight: '80vh', position: 'relative'
     }}>
       <img
-        src={user.profilepic || 'https://ui-avatars.com/api/?name=' + user.firstname}
+        src={user.profilepic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.firstname || user.username)}
         alt="Profile"
         style={{
           width: 140,
@@ -48,15 +57,40 @@ const UserProfile = () => {
           background: '#5a67d8',
           color: '#fff',
           border: 'none',
-          cursor: 'pointer'
+          cursor: 'pointer',
+          marginBottom: 18
         }}
-        onClick={() => window.location.href='/editprofile'}
+        onClick={() => window.location.href = '/editprofile'}
       >
         Edit Profile
       </button>
-      
+
+      {/* Mix & Match button */}
+      <button
+        style={{
+          padding: '10px 32px',
+          fontSize: 17,
+          borderRadius: 10,
+          background: '#f6e7a9',
+          color: '#444',
+          border: 'none',
+          cursor: 'pointer',
+          marginTop: 8,
+          fontWeight: 500
+        }}
+        onClick={() => setShowMixModal(true)}
+      >
+        Mix & Match
+      </button>
+
+      {/* Modal overlay */}
+      {showMixModal && (
+        <MixAndMatchModal
+          onClose={() => setShowMixModal(false)}
+          onSubmit={handleMixSubmit}
+        />
+      )}
     </div>
-    
   );
 };
 

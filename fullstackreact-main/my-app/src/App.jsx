@@ -7,6 +7,7 @@ import RegisterPage2 from './pages/RegisterPage2';
 import UserProfile from './pages/UserProfile';
 import EditProfile from './pages/EditProfile';
 import ChangePassword from './pages/ChangePassword';
+
 const App = () => {
   return (
     <Router>

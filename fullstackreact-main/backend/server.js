@@ -220,6 +220,99 @@ app.post('/api/sendotp', async (req, res) => {
 });
 
 
+// --- Credit Card CRUD ---
+
+// POST /api/creditcard (expects {username, cardnumber, name, expiry_month, expiry_year, cvc})
+app.post('/api/creditcard', async (req, res) => {
+  const { username, cardnumber, name, expiry_month, expiry_year, cvc } = req.body;
+  if (!username || !cardnumber || !name || !expiry_month || !expiry_year || !cvc)
+    return res.status(400).send('All fields required');
+  try {
+    // Masking logic for UI
+    const cardnumber_masked = '************' + cardnumber.slice(-4);
+    const cvc_masked = '***';
+    // Save all data to DB (do NOT store cvc plaintext in real production apps)
+    await db.query(`
+      INSERT INTO creditcards (username, cardnumber, cardholder_name, expiry_month, expiry_year, cvc)
+      VALUES ($1,$2,$3,$4,$5,$6)
+      ON CONFLICT (username) DO UPDATE SET
+      cardnumber=$2, cardholder_name=$3, expiry_month=$4, expiry_year=$5, cvc=$6
+    `, [username, cardnumber, name, expiry_month, expiry_year, cvc]);
+    res.send('Credit card saved');
+  } catch (err) {
+    res.status(500).send(err.message || 'Error');
+  }
+});
+
+// GET /api/creditcard?username=...
+app.get('/api/creditcard', async (req, res) => {
+  const { username } = req.query;
+  if (!username) return res.status(400).send('Username required');
+  try {
+    const result = await db.query(
+      'SELECT cardnumber, cardholder_name, expiry_month, expiry_year, cvc FROM creditcards WHERE username = $1', [username]
+    );
+    if (!result.rows.length) return res.status(404).send('Not found');
+    const card = result.rows[0];
+    res.json({
+      ...card,
+      cardnumber_masked: '************' + card.cardnumber.slice(-4),
+      cvc_masked: '***'
+    });
+  } catch (err) {
+    res.status(500).send(err.message || 'Error');
+  }
+});
+
+// DELETE /api/creditcard?username=...
+app.delete('/api/creditcard', async (req, res) => {
+  const { username } = req.query;
+  if (!username) return res.status(400).send('Username required');
+  try {
+    await db.query('DELETE FROM creditcards WHERE username=$1', [username]);
+    res.send('Card deleted');
+  } catch (err) {
+    res.status(500).send(err.message || 'Error');
+  }
+});
+
+
+app.post('/api/mixmatch', async (req, res) => {
+  const { username, category, tags, color, owned } = req.body;
+
+  try {
+    // 1. Query database for matching clothes
+    // Example query, adapt as needed:
+    let query = 'SELECT * FROM clothes WHERE 1=1';
+    let params = [];
+    if (category) { query += ' AND category = $' + (params.length+1); params.push(category); }
+    if (color) { query += ' AND color = $' + (params.length+1); params.push(color); }
+    // Add owned/unowned logic as needed
+    // For tags, use LIKE or an array column depending on your schema
+
+    const result = await db.query(query, params);
+
+    // 2. Prepare prompt for ChatGPT
+    const prompt = `I have the following clothes in my inventory:${result.rows.map(row => `ID:${row.id}, Category:${row.category}, Color:${row.color}, Tags:${row.tags}, Owned:${row.owned ? "Yes" : "No"}`).join('\n')}Please recommend a mix and match outfit. Output format: "Shirt:<id>,Pants:<id>,Shoes:<id>"Only select items that match these filters:- Category: ${category || "Any"}- Color: ${color || "Any"}- Tags: ${tags || "Any"}- Owned: ${owned || "Any"}Respond ONLY with the output format.`;
+
+    // 3. Call ChatGPT API
+    const completion = await openai.createChatCompletion({
+      model: "gpt-3.5-turbo",
+      messages: [{role: "user", content: prompt}],
+      temperature: 1.1,
+      max_tokens: 60,
+    });
+
+    const reply = completion.data.choices[0].message.content;
+    res.json({ result: reply });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error generating mix and match');
+  }
+});
+
+
 
 app.listen(5000, () => {
   console.log('Server running on port 5000');
