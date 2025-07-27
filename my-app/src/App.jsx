@@ -1,6 +1,7 @@
 // src/App.jsx
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import RegisterPage2 from './pages/RegisterPage2';
@@ -14,7 +15,7 @@ const App = () => {
         <Link to="/register">Register</Link>
       </nav>
       <Routes>
-        <Route path="/" element={<LoginPage />} /> {/*change this to main home page??*/}
+        <Route path="/" element={<HomePage />} /> {/*change this to main home page??*/}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/register2" element={<RegisterPage2 />} />

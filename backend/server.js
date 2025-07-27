@@ -81,6 +81,15 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+app.get('/api/products', async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM product');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching products:', err);
+    res.status(500).send('Server error while fetching products');
+  }
+});
 
 app.listen(5000, () => {
   console.log('Server running on port 5000');
