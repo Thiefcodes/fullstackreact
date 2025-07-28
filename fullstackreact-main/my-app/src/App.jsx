@@ -8,6 +8,10 @@ import UserProfile from './pages/UserProfile';
 import EditProfile from './pages/EditProfile';
 import ChangePassword from './pages/ChangePassword';
 
+// ===> Jun Hong pages <===
+import MarketplacePage from './pages/MarketplacePage';
+import CreateProductPage from './pages/CreateProductPage';
+
 const App = () => {
   return (
     <Router>
@@ -23,6 +27,9 @@ const App = () => {
         <Route path="/profile" element={<UserProfile />} />
         <Route path="/editprofile" element={<EditProfile />} />
         <Route path="/changepassword" element={<ChangePassword />} />
+
+        <Route path="/marketplace" element={<MarketplacePage />} />
+        <Route path="/products/new" element={<CreateProductPage />} />
 
       </Routes>
     </Router>

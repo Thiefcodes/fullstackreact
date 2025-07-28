@@ -6,7 +6,6 @@ const multer = require('multer');
 const path = require('path');
 const app = express();
 const nodemailer = require('nodemailer');
-require('dotenv').config();
 app.use(cors());
 app.use(express.json());
 
@@ -311,6 +310,70 @@ app.post('/api/mixmatch', async (req, res) => {
     res.status(500).send('Error generating mix and match');
   }
 });
+
+// jun hong's codes (marketplaceproducts GET and POST methods)
+// =================================================================
+//  ===> NEW: PRODUCT CATALOGUE MANAGEMENT ROUTES <===
+// =================================================================
+
+/**
+ * @route   POST /api/marketplaceproducts
+ * @desc    Create a new product listing in the marketplace
+ * @access  Public (should be private to logged-in users in the future)
+ */
+app.post('/api/marketplaceproducts', async (req, res) => {
+  try {
+    const { seller_id, title, description, price, category, size, image_url } = req.body;
+
+    // Basic validation
+    if (!seller_id || !title || !price || !category) {
+      return res.status(400).json({ error: 'Missing required fields: seller_id, title, price, category.' });
+    }
+
+    const newProductQuery = `
+      INSERT INTO marketplaceproducts (seller_id, title, description, price, category, size, image_url, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'available')
+      RETURNING *;
+    `;
+    const values = [seller_id, title, description, price, category, size, image_url];
+
+    const result = await db.query(newProductQuery, values);
+    res.status(201).json(result.rows[0]);
+
+  } catch (err) {
+    console.error('Error creating product:', err.message);
+    res.status(500).json({ error: 'Server error while creating product.' });
+  }
+});
+
+/**
+ * @route   GET /api/marketplaceproducts
+ * @desc    Get all available products from the marketplace
+ * @access  Public
+ */
+app.get('/api/marketplaceproducts', async (req, res) => {
+    try {
+        // We join with the users table to get the seller's username for each product.
+        // This is more efficient than making a separate DB call for each product.
+        const getProductsQuery = `
+            SELECT p.*, u.username AS seller_name
+            FROM marketplaceproducts p
+            JOIN users u ON p.seller_id = u.id
+            WHERE p.status = 'available'
+            ORDER BY p.created_at DESC;
+        `;
+
+        const result = await db.query(getProductsQuery);
+        res.status(200).json(result.rows);
+
+    } catch (err) {
+        console.error('Error fetching products:', err.message);
+        res.status(500).json({ error: 'Server error while fetching products.' });
+    }
+});
+
+
+// =================================================================
 
 
 
