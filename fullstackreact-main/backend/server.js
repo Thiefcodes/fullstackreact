@@ -124,7 +124,7 @@ app.post('/api/login', async (req, res) => {
     }
     // Return only necessary info!
     const user = result.rows[0];
-    res.json({ username: user.username, type: user.type });
+    res.json({ id: user.id, username: user.username, type: user.type });
   } catch (err) {
     res.status(500).send('Server error');
   }

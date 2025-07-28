@@ -17,7 +17,8 @@ const App = () => {
     <Router>
       <nav>
         <Link to="/login">Login</Link> |{' '}
-        <Link to="/register">Register</Link>
+        <Link to="/register">Register</Link> |{' '}
+        <Link to="/marketplace">Marketplace</Link>
       </nav>
       <Routes>
         <Route path="/" element={<LoginPage />} /> {/*change this to main home page??*/}
