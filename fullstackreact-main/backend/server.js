@@ -81,6 +81,14 @@ app.post('/api/register', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [username, password, type, firstname, lastname, phone, address, country, profilepic, email]
     );
+
+    const newUser = await db.query('SELECT id FROM users WHERE username = $1', [username]);
+    const userId = newUser.rows[0].id;
+
+    await db.query(
+      `INSERT INTO user_active_status (user_id, status) VALUES ($1, 'active')`,
+      [userId]
+    );
     res.send('User registered');
   } catch (err) {
     res.status(500).send(err?.detail || err.message || 'Registration error');
@@ -89,27 +97,35 @@ app.post('/api/register', async (req, res) => {
 
 
 
-// Add this to server.js:
+// Add this to your server.js (replace your existing /api/users route)
 app.get('/api/users', async (req, res) => {
-  const { username } = req.query;
-  if (username) {
-    try {
-      const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
-      if (result.rows.length === 0) return res.status(404).send('User not found');
-      res.json(result.rows[0]);
-    } catch (err) {
-      res.status(500).send(err);
+    const { username, id } = req.query;
+    if (username) {
+        try {
+            const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
+            if (result.rows.length === 0) return res.status(404).send('User not found');
+            res.json(result.rows[0]);
+        } catch (err) {
+            res.status(500).send(err);
+        }
+    } else if (id) {
+        try {
+            const result = await db.query('SELECT * FROM users WHERE id = $1', [id]);
+            if (result.rows.length === 0) return res.status(404).send('User not found');
+            res.json(result.rows[0]);
+        } catch (err) {
+            res.status(500).send(err);
+        }
+    } else {
+        try {
+            const result = await db.query('SELECT * FROM users');
+            res.json(result.rows);
+        } catch (err) {
+            res.status(500).send(err);
+        }
     }
-  } else {
-    // default: return all users
-    try {
-      const result = await db.query('SELECT * FROM users');
-      res.json(result.rows);
-    } catch (err) {
-      res.status(500).send(err);
-    }
-  }
 });
+
 
 
 app.post('/api/login', async (req, res) => {

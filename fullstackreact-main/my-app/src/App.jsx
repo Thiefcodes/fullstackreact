@@ -8,6 +8,10 @@ import UserProfile from './pages/UserProfile';
 import EditProfile from './pages/EditProfile';
 import ChangePassword from './pages/ChangePassword';
 
+// ===> Theethut pages <===
+import UserManagement from './pages/UserManagement';
+import ViewUserProfile from './pages/ViewUserProfile';
+
 // ===> Jun Hong pages <===
 import MarketplacePage from './pages/MarketplacePage';
 import CreateProductPage from './pages/CreateProductPage';
@@ -28,7 +32,8 @@ const App = () => {
         <Route path="/profile" element={<UserProfile />} />
         <Route path="/editprofile" element={<EditProfile />} />
         <Route path="/changepassword" element={<ChangePassword />} />
-
+        <Route path="/usermanagement" element={<UserManagement />} />
+        <Route path="/users/:userId" element={<ViewUserProfile />} />
         <Route path="/marketplace" element={<MarketplacePage />} />
         <Route path="/products/new" element={<CreateProductPage />} />
 
