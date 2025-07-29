@@ -19,6 +19,7 @@ const UserManagement = () => {
     const [targetUser, setTargetUser] = useState(null);
     const [showConfirm, setShowConfirm] = useState(false);
     const [pendingSuspend, setPendingSuspend] = useState(null);
+    const [deletingUser, setDeletingUser] = useState(null);
 
 
     // Call this when clicking the suspend (gavel) icon:
@@ -75,6 +76,27 @@ const UserManagement = () => {
         }
         return new Date(now.getTime() + ms).toISOString(); // or .toLocaleString()
     }
+
+    const handleDeleteUser = async (user) => {
+        if (!window.confirm(`Are you sure you want to delete user "${user.username}"? This cannot be undone.`)) return;
+        try {
+            const res = await fetch(`http://localhost:5000/api/users/${user.id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setSuccessMsg(`User ${user.username} deleted.`);
+                // Refresh users and statuses
+                fetch('http://localhost:5000/api/users')
+                    .then(res => res.json())
+                    .then(data => setUsers(data));
+                fetch('http://localhost:5000/api/user_active_status')
+                    .then(res => res.json())
+                    .then(data => setUserStatuses(data));
+            } else {
+                alert(await res.text());
+            }
+        } catch (err) {
+            alert('Failed to delete user.');
+        }
+    };
 
     useEffect(() => {
         fetch('http://localhost:5000/api/users')
@@ -206,7 +228,7 @@ const UserManagement = () => {
                                                 filter: undefined,
                                                 opacity: 1
                                             }}
-                                        // Add delete logic as needed
+                                            onClick={() => handleDeleteUser(user)}
                                         />
                                     </td>
                                 </tr>

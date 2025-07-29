@@ -376,6 +376,36 @@ app.get('/api/user_suspension_history', async (req, res) => {
     }
 });
 
+// Delete user and their status/history (and maybe other related info)
+app.delete('/api/users/:id', async (req, res) => {
+    const userId = req.params.id;
+    try {
+        // 1. Get username for creditcard deletion
+        const userResult = await db.query('SELECT username FROM users WHERE id = $1', [userId]);
+        const username = userResult.rows[0]?.username;
+
+        // 2. Delete reviews
+        await db.query('DELETE FROM reviews WHERE user_id = $1', [userId]);
+        // 3. Delete suspension history as user or as staff who suspended others
+        await db.query('DELETE FROM user_suspension_history WHERE user_id = $1', [userId]);
+        await db.query('DELETE FROM user_suspension_history WHERE suspended_by = $1', [userId]);
+        // 4. Delete user_active_status
+        await db.query('DELETE FROM user_active_status WHERE user_id = $1', [userId]);
+        // 5. Delete marketplaceorders as buyer
+        await db.query('DELETE FROM marketplaceorders WHERE buyer_id = $1', [userId]);
+        // 6. Delete marketplaceproducts as seller
+        await db.query('DELETE FROM marketplaceproducts WHERE seller_id = $1', [userId]);
+        // 7. Delete creditcards by username
+        if (username) {
+            await db.query('DELETE FROM creditcards WHERE username = $1', [username]);
+        }
+        // 8. Delete user
+        await db.query('DELETE FROM users WHERE id = $1', [userId]);
+        res.send('User deleted');
+    } catch (err) {
+        res.status(500).send(err.message || 'Error deleting user');
+    }
+});
 
 
 
