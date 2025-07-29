@@ -327,6 +327,58 @@ app.post('/api/mixmatch', async (req, res) => {
   }
 });
 
+app.post('/api/suspend_user', async (req, res) => {
+    const { user_id, suspend_until, reason, staff_id } = req.body;
+    if (!user_id || !suspend_until || !staff_id) return res.status(400).send('Missing data');
+    try {
+        // 1. Update active status
+        await db.query(`
+      INSERT INTO user_active_status (user_id, status, suspend_until, reason)
+      VALUES ($1, 'suspended', $2, $3)
+      ON CONFLICT (user_id) DO UPDATE SET
+      status='suspended', suspend_until=$2, reason=$3
+    `, [user_id, suspend_until, reason || null]);
+
+        // 2. Insert into suspension history
+        await db.query(`
+      INSERT INTO user_suspension_history (user_id, suspended_by, start_time, end_time, reason)
+      VALUES ($1, $2, NOW(), $3, $4)
+    `, [user_id, staff_id, suspend_until, reason || null]);
+
+        res.send('User suspended and logged in history');
+    } catch (err) {
+        res.status(500).send(err.message || 'Error suspending user');
+    }
+});
+
+// Add this to your backend (server.js)
+app.get('/api/user_active_status', async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM user_active_status');
+        res.json(result.rows); // This returns an array like the example you posted!
+    } catch (err) {
+        res.status(500).send(err.message || 'Error');
+    }
+});
+
+// Add to server.js if not already present:
+app.get('/api/user_suspension_history', async (req, res) => {
+    const { user_id } = req.query;
+    if (!user_id) return res.status(400).send('user_id required');
+    try {
+        const result = await db.query(
+            'SELECT * FROM user_suspension_history WHERE user_id = $1 ORDER BY start_time DESC',
+            [user_id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).send(err.message || 'Error');
+    }
+});
+
+
+
+
 // jun hong's codes (marketplaceproducts GET and POST methods)
 // =================================================================
 //  ===> NEW: PRODUCT CATALOGUE MANAGEMENT ROUTES <===
