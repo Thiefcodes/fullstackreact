@@ -4,11 +4,10 @@ import SuspendUserModal from '../components/SuspendUserModal';
 import ConfirmSuspendModal from '../components/ConfirmSuspendModal';
 import DeleteUserModal from '../components/DeleteUserModal';
 import Toast from '../components/Toast';
-
-// Placeholder images (update these URLs with real icons when ready)
-const infoIcon = 'https://placehold.co/24x24?text=I';
-const gavelIcon = 'https://placehold.co/24x24?text=G';  // gavel/edit
-const deleteIcon = 'https://placehold.co/24x24?text=X'; // delete
+import '../styles/usermanagement.css'
+import InfoIcon from '../assets/info-icon.png';
+import GavelIcon from '../assets/gavel-icon.png';
+import DeleteIcon from '../assets/delete-icon.png';
 
 
 const UserManagement = () => {
@@ -124,15 +123,14 @@ const UserManagement = () => {
     });
 
     return (
-        <div style={{ padding: 32 }}>
-            <h1>Manage Users</h1>
+        <div className="um-container">
+            <h1 className="um-title">Manage Users</h1>
 
-            {/* Sorting dropdown */}
-            <div style={{ marginBottom: 24, textAlign: 'right' }}>
+            <div className="um-sorting">
                 <select
                     value={sortOrder}
                     onChange={e => setSortOrder(e.target.value)}
-                    style={{ padding: 8, borderRadius: 20 }}
+                    className="um-sort-dropdown"
                 >
                     <option value="num-asc">Number - Asc</option>
                     <option value="num-desc">Number - Desc</option>
@@ -141,16 +139,8 @@ const UserManagement = () => {
                 </select>
             </div>
 
-            {/* Users Table */}
-            <div style={{
-                background: '#fff',
-                borderRadius: 18,
-                padding: 36,
-                maxWidth: 850,
-                margin: '0 auto',
-                boxShadow: '0 2px 12px #eee'
-            }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="um-table-wrapper">
+                <table className="um-table">
                     <thead>
                         <tr>
                             <th align="left">No.</th>
@@ -163,41 +153,26 @@ const UserManagement = () => {
                         {usersWithStatus.map((user, i) => {
                             const isSuspended = user.status === 'suspended';
                             return (
-                                <tr
-                                    key={user.id}
-                                    style={{
-                                        // background: isSuspended ? '#ededed' : undefined,   // <--- REMOVE this line!
-                                        color: isSuspended ? '#999' : undefined,
-                                        opacity: isSuspended ? 0.6 : 1
-                                    }}
-                                >
-                                    <td>
+                                <tr key={user.id} >
+                                    <td className={isSuspended ? 'um-cell-suspended' : ''}>
                                         {sortOrder === 'num-desc'
                                             ? usersWithStatus.length - i
                                             : i + 1}
                                     </td>
-                                    <td>{user.username}</td>
-                                    <td>{user.email}</td>
+                                    <td className={isSuspended ? 'um-cell-suspended' : ''}>{user.username}</td>
+                                    <td className={isSuspended ? 'um-cell-suspended' : ''}>{user.email}</td>
                                     <td>
-                                        {/* VIEW ICON: always clickable */}
                                         <img
-                                            src={infoIcon}
+                                            src={InfoIcon}
                                             alt="view"
-                                            style={{
-                                                marginRight: 12,
-                                                cursor: 'pointer',
-                                                filter: undefined,
-                                                opacity: 1
-                                            }}
+                                            className="um-action-icon"
                                             onClick={() => navigate(`/users/${user.id}`)}
                                         />
-
-                                        {/* SUSPEND ICON: disabled and greyed out if suspended */}
                                         <img
-                                            src={gavelIcon}
+                                            src={GavelIcon}
                                             alt="suspend"
+                                            className="um-action-icon"
                                             style={{
-                                                marginRight: 12,
                                                 cursor: isSuspended ? 'not-allowed' : 'pointer',
                                                 filter: isSuspended ? 'grayscale(1)' : undefined,
                                                 opacity: isSuspended ? 0.5 : 1
@@ -205,16 +180,10 @@ const UserManagement = () => {
                                             onClick={isSuspended ? undefined : () => handleSuspendClick(user)}
                                             disabled={isSuspended}
                                         />
-
-                                        {/* DELETE ICON: always clickable */}
                                         <img
-                                            src={deleteIcon}
+                                            src={DeleteIcon}
                                             alt="delete"
-                                            style={{
-                                                cursor: 'pointer',
-                                                filter: undefined,
-                                                opacity: 1
-                                            }}
+                                            className="um-action-icon"
                                             onClick={() => {
                                                 setUserToDelete(user);
                                                 setShowDeleteModal(true);

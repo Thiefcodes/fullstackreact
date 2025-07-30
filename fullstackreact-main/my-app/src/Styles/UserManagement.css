@@ -1,0 +1,83 @@
+.um-container {
+    padding: 32px;
+    background: #f6faf7;
+    min-height: 100vh;
+}
+
+.um-title {
+    font-size: 2rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #15342D;
+}
+
+.um-sorting {
+    margin-bottom: 24px;
+    text-align: right;
+}
+
+.um-sort-dropdown {
+    padding: 8px 18px;
+    border-radius: 20px;
+    border: 1px solid #c5ead7;
+    font-size: 1rem;
+    background: #fff;
+    color: #15342D;
+    font-weight: 500;
+}
+
+.um-table-wrapper {
+    background: #fff;
+    border-radius: 18px;
+    padding: 36px;
+    max-width: 900px;
+    margin: 0 auto;
+    box-shadow: 0 2px 12px #eee;
+}
+
+.um-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1.08rem;
+}
+
+.um-table th,
+.um-table td {
+    padding: 14px 12px;
+    text-align: left;
+}
+
+.um-table thead th {
+    color: #1b523b;
+    font-weight: 600;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.um-table tbody tr {
+    border-bottom: 1px solid #f2f6f3;
+}
+
+.um-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.um-row-suspended {
+    color: #999;
+    opacity: 0.6;
+}
+
+.um-action-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 12px;
+    vertical-align: middle;
+    cursor: pointer;
+    transition: filter 0.18s, opacity 0.18s;
+}
+    .um-action-icon:last-child {
+        margin-right: 0;
+    }
+
+.um-cell-suspended {
+    color: #bbb;
+}

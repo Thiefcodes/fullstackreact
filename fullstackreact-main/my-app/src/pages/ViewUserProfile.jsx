@@ -2,6 +2,8 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import ReportInfoModal from '../components/ReportInfoModal';
 import '../styles/ViewUserProfile.css';
+import infoIcon from '../assets/info-icon.png';
+
 
 const ViewUserProfile = () => {
     const { userId } = useParams();
@@ -170,13 +172,14 @@ const ViewUserProfile = () => {
                                         <td>{rep.reason}</td>
                                         <td style={{ textAlign: 'center' }}>
                                             <img
-                                                src="https://placehold.co/24x24?text=i"
+                                                src={infoIcon}
                                                 alt="View Details"
                                                 className="vup-report-action-img"
                                                 onClick={() => {
                                                     setSelectedReport(rep);
                                                     setShowReportModal(true);
                                                 }}
+                                                style={{ width: 24 }}
                                             />
                                         </td>
                                     </tr>

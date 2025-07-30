@@ -26,6 +26,8 @@ import InventoryManagement from './Pages/InventoryManagement';
 import CreateProduct       from './Pages/CreateProduct';
 import StockUp             from './Pages/StockUp';
 
+import Logo from "./assets/EcoThrift-logo.png";
+
 const App = () => {
   const isLoggedIn = !!localStorage.getItem('userId');
   const userType   = localStorage.getItem('userType');
@@ -42,7 +44,7 @@ const App = () => {
           <nav className="main-navbar">
               {/* Logo (always far left) */}
               <img
-                  src="src/assets/EcoThrift-logo.png"
+                  src={Logo}
                   alt="Logo"
                   className="navbar-logo"
               />

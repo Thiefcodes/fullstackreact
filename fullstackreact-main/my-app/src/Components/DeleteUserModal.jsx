@@ -1,4 +1,5 @@
 import React from 'react';
+import closeIcon from '../assets/close-icon.png';
 
 export default function DeleteUserModal({ show, user, onCancel, onConfirm }) {
     if (!show || !user) return null;
@@ -13,11 +14,23 @@ export default function DeleteUserModal({ show, user, onCancel, onConfirm }) {
             }}>
                 <button
                     onClick={onCancel}
+                    type="button"
                     style={{
-                        position: 'absolute', right: 18, top: 18, fontSize: 21, border: 'none',
-                        background: 'none', cursor: 'pointer', color: '#222'
+                        position: 'absolute', right: 18, top: 18,
+                        background: 'none', border: 'none', cursor: 'pointer', padding: 0,
                     }}
-                >×</button>
+                    aria-label="Close"
+                >
+                    <img
+                        src={closeIcon}
+                        alt="Close"
+                        style={{
+                            width: 28,  // or 24 or 32, depending on what looks best
+                            height: 28,
+                            display: 'block',
+                        }}
+                    />
+                </button>
                 <h2 style={{ marginBottom: 22 }}>Delete User</h2>
                 <div style={{ fontSize: 17, marginBottom: 26 }}>
                     Are you sure you want to <b>delete "{user.username}"</b>?<br />This action cannot be undone.

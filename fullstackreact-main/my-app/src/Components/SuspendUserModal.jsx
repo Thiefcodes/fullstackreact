@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import closeIcon from '../assets/close-icon.png';
+
 
 const timeOptions = ['Minutes', 'Hours', 'Days', 'Months', 'Years'];
 
@@ -50,10 +52,21 @@ export default function SuspendUserModal({ show, onClose, user, onSuspend }) {
                     onClick={onClose}
                     type="button"
                     style={{
-                        position: 'absolute', right: 18, top: 18, fontSize: 23, background: 'none',
-                        border: 'none', cursor: 'pointer', color: '#333'
+                        position: 'absolute', right: 18, top: 18, background: 'none',
+                        border: 'none', cursor: 'pointer', padding: 0, // remove default button padding
                     }}
-                >×</button>
+                    aria-label="Close"
+                >
+                    <img
+                        src={closeIcon}
+                        alt="Close"
+                        style={{
+                            width: 28,   // adjust for your UI (try 24-32)
+                            height: 28,
+                            display: 'block',
+                        }}
+                    />
+                </button>
 
                 <div style={{ marginBottom: 36, textAlign: 'center', fontSize: 21 }}>
                     How long do you want to suspend <b>{user.username}</b>?
