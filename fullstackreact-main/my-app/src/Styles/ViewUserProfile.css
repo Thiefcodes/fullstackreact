@@ -190,3 +190,11 @@
         white-space: normal;
         text-align: left;
     }
+
+.vup-suspend-duration {
+    color: #9e5e5e;
+    font-weight: 400;
+    font-size: 16px;
+    margin-left: 10px;
+    vertical-align: middle;
+}
