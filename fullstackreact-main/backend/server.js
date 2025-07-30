@@ -18,7 +18,6 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-
 // ============ JH multer codes =================
 const productMediaStorage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -50,7 +49,7 @@ app.post('/api/product-media/upload', productMediaUpload.array('productMedia', 5
 // =============================
 
 
-// Multer storage to use username as filename
+// Multer storage to use username as filename (for profile pics)
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, 'uploads/');
@@ -65,12 +64,48 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
+// Unified image upload storage (your version - more flexible)
+const unifiedStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/');
+    },
+    filename: function (req, file, cb) {
+        // Prioritize product_name from the form data, then username, then fallback to a generic timestamped name
+        let baseName = 'uploaded_file'; // Default fallback
+        if (req.body.product_name) {
+            baseName = String(req.body.product_name);
+        } else if (req.body.username) {
+            baseName = String(req.body.username);
+        }
+       
+        // Clean up the baseName: replace spaces with underscores, remove non-alphanumeric chars, lowercase
+        baseName = baseName.replace(/\s+/g, '_').replace(/[^a-z0-9_.-]/gi, '').toLowerCase();
+        if (baseName === '') baseName = 'file'; // Ensure it's not empty after sanitization
+
+        const ext = path.extname(file.originalname);
+        // Create a unique filename using baseName and a timestamp
+        cb(null, `${baseName}-${Date.now()}${ext}`);
+    }
+});
+const unifiedUpload = multer({ storage: unifiedStorage });
+
 app.use('/uploads', express.static('uploads'));
 
+// Profile pic upload (teammate's version)
 app.post('/api/uploadprofilepic', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).send('No file uploaded');
   const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
   res.json({ url: fileUrl });
+});
+
+// Unified image upload endpoint (your version - more flexible)
+app.post('/api/uploadimage', unifiedUpload.single('file'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded.' });
+    }
+    // Construct the URL using the server's base URL
+    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    res.json({ url: fileUrl });
 });
 
 
@@ -123,6 +158,7 @@ app.post('/api/register', async (req, res) => {
     );
     res.send('User registered');
   } catch (err) {
+    console.error('Registration error:', err);
     res.status(500).send(err?.detail || err.message || 'Registration error');
   }
 });
@@ -138,7 +174,8 @@ app.get('/api/users', async (req, res) => {
             if (result.rows.length === 0) return res.status(404).send('User not found');
             res.json(result.rows[0]);
         } catch (err) {
-            res.status(500).send(err);
+            console.error('Error fetching user by username:', err);
+            res.status(500).send(err.message || 'Server error');
         }
     } else if (id) {
         try {
@@ -146,14 +183,16 @@ app.get('/api/users', async (req, res) => {
             if (result.rows.length === 0) return res.status(404).send('User not found');
             res.json(result.rows[0]);
         } catch (err) {
-            res.status(500).send(err);
+            console.error('Error fetching user by id:', err);
+            res.status(500).send(err.message || 'Server error');
         }
     } else {
         try {
             const result = await db.query('SELECT * FROM users');
             res.json(result.rows);
         } catch (err) {
-            res.status(500).send(err);
+            console.error('Error fetching all users:', err);
+            res.status(500).send(err.message || 'Server error');
         }
     }
 });
@@ -174,6 +213,7 @@ app.post('/api/login', async (req, res) => {
     const user = result.rows[0];
     res.json({ id: user.id, username: user.username, type: user.type });
   } catch (err) {
+    console.error('Login error:', err);
     res.status(500).send('Server error');
   }
 });
@@ -209,6 +249,7 @@ app.put('/api/updateprofile', async (req, res) => {
     }
     res.json({ message: 'Profile updated', user: result.rows[0] });
   } catch (err) {
+    console.error('Profile update error:', err);
     res.status(500).send(err?.detail || err.message || 'Update error');
   }
 });
@@ -287,6 +328,7 @@ app.post('/api/creditcard', async (req, res) => {
     `, [username, cardnumber, name, expiry_month, expiry_year, cvc]);
     res.send('Credit card saved');
   } catch (err) {
+    console.error('Credit card save error:', err);
     res.status(500).send(err.message || 'Error');
   }
 });
@@ -307,6 +349,7 @@ app.get('/api/creditcard', async (req, res) => {
       cvc_masked: '***'
     });
   } catch (err) {
+    console.error('Error fetching credit card:', err);
     res.status(500).send(err.message || 'Error');
   }
 });
@@ -319,6 +362,7 @@ app.delete('/api/creditcard', async (req, res) => {
     await db.query('DELETE FROM creditcards WHERE username=$1', [username]);
     res.send('Card deleted');
   } catch (err) {
+    console.error('Error deleting credit card:', err);
     res.status(500).send(err.message || 'Error');
   }
 });
@@ -342,16 +386,19 @@ app.post('/api/mixmatch', async (req, res) => {
     // 2. Prepare prompt for ChatGPT
     const prompt = `I have the following clothes in my inventory:${result.rows.map(row => `ID:${row.id}, Category:${row.category}, Color:${row.color}, Tags:${row.tags}, Owned:${row.owned ? "Yes" : "No"}`).join('\n')}Please recommend a mix and match outfit. Output format: "Shirt:<id>,Pants:<id>,Shoes:<id>"Only select items that match these filters:- Category: ${category || "Any"}- Color: ${color || "Any"}- Tags: ${tags || "Any"}- Owned: ${owned || "Any"}Respond ONLY with the output format.`;
 
-    // 3. Call ChatGPT API
-    const completion = await openai.createChatCompletion({
-      model: "gpt-3.5-turbo",
-      messages: [{role: "user", content: prompt}],
-      temperature: 1.1,
-      max_tokens: 60,
-    });
+    // 3. Call ChatGPT API (Note: OpenAI not imported - needs configuration)
+    // const completion = await openai.createChatCompletion({
+    //   model: "gpt-3.5-turbo",
+    //   messages: [{role: "user", content: prompt}],
+    //   temperature: 1.1,
+    //   max_tokens: 60,
+    // });
 
-    const reply = completion.data.choices[0].message.content;
-    res.json({ result: reply });
+    // const reply = completion.data.choices[0].message.content;
+    // res.json({ result: reply });
+
+    // Placeholder response since OpenAI is not configured
+    res.json({ result: "Mix and match feature requires OpenAI API configuration." });
 
   } catch (err) {
     console.error(err);
@@ -598,6 +645,282 @@ app.delete('/api/cart/:userId/:productId', async (req, res) => {
 });
 
 // ================================================================
+
+// =================================================================
+//  ===> YOUR PRODUCT CRUD OPERATIONS (for the 'product' table) <===
+// =================================================================
+
+// GET all products with optional search, category filter, and pagination
+app.get('/api/products', async (req, res) => {
+    const { search, category, page = 1, limit = 9 } = req.query; // Default to 9 items per page
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    let query = 'SELECT id, created_at, product_name, product_colour, product_material, price, product_description, product_tags, product_points, stock_amt, image_urls, scheduled_stock_amount, scheduled_date FROM product WHERE 1=1';
+    let countQuery = 'SELECT COUNT(id) FROM product WHERE 1=1';
+    const queryParams = []; // Parameters for the main query (with limit/offset)
+    const countParams = []; // Parameters for the count query (only WHERE clause)
+    let paramIndex = 1;
+
+    if (search) {
+        query += ` AND (product_name ILIKE $${paramIndex} OR product_description ILIKE $${paramIndex})`;
+        countQuery += ` AND (product_name ILIKE $${paramIndex} OR product_description ILIKE $${paramIndex})`;
+        queryParams.push(`%${search}%`);
+        countParams.push(`%${search}%`);
+        paramIndex++;
+    }
+
+    if (category) {
+        query += ` AND product_tags ILIKE $${paramIndex}`;
+        countQuery += ` AND product_tags ILIKE $${paramIndex}`;
+        queryParams.push(`%${category}%`);
+        countParams.push(`%${category}%`);
+        paramIndex++;
+    }
+
+    query += ` ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    queryParams.push(parseInt(limit), offset);
+
+    try {
+        const productsResult = await db.query(query, queryParams);
+        const countResult = await db.query(countQuery, countParams);
+
+        const totalProducts = parseInt(countResult.rows[0].count, 10);
+        const totalPages = Math.ceil(totalProducts / parseInt(limit));
+
+        res.json({
+            products: productsResult.rows,
+            totalProducts,
+            totalPages,
+            currentPage: parseInt(page),
+            limit: parseInt(limit)
+        });
+    } catch (err) {
+        console.error('Error fetching products (GET /api/products):', err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+});
+
+// GET a single product by ID
+app.get('/api/products/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await db.query('SELECT * FROM product WHERE id = $1', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(`Error fetching product with ID ${id}:`, err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+});
+
+// POST a new product
+app.post('/api/products', async (req, res) => {
+    const { product_name, product_colour, price, product_description, product_material, product_tags, product_points, stock_amt, image_urls } = req.body;
+    try {
+        const tagsString = product_tags || '';
+        const imageUrlsString = image_urls || '';
+
+        const scheduled_stock_amount = null;
+        const scheduled_date = null;
+
+        const result = await db.query(
+            `INSERT INTO product (product_name, product_colour, price, product_description, product_material, product_tags, product_points, stock_amt, image_urls, scheduled_stock_amount, scheduled_date, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()) RETURNING *`,
+            [product_name, product_colour, price, product_description, product_material, tagsString, product_points, stock_amt, imageUrlsString, scheduled_stock_amount, scheduled_date]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error adding new product:', err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+});
+
+// PUT (Update) an existing product
+app.put('/api/products/:id', async (req, res) => {
+    const { id } = req.params;
+    const { product_name, product_colour, price, product_description, product_material, product_tags, product_points, stock_amt, image_urls, scheduled_stock_amount, scheduled_date } = req.body;
+    try {
+        const tagsString = product_tags || '';
+        const imageUrlsString = image_urls || '';
+
+        const finalScheduledStockAmount = (scheduled_stock_amount === undefined || scheduled_stock_amount === '') ? null : scheduled_stock_amount;
+        const finalScheduledDate = (scheduled_date === undefined || scheduled_date === '') ? null : scheduled_date;
+
+        const result = await db.query(
+            `UPDATE product
+             SET product_name = $1, product_colour = $2, price = $3, product_description = $4,
+                 product_material = $5, product_tags = $6, product_points = $7, stock_amt = $8, image_urls = $9,
+                 scheduled_stock_amount = $10, scheduled_date = $11
+             WHERE id = $12 RETURNING *`,
+            [product_name, product_colour, price, product_description, product_material, tagsString, product_points, stock_amt, imageUrlsString, finalScheduledStockAmount, finalScheduledDate, id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(`Error updating product with ID ${id}:`, err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+});
+
+// DELETE a product
+app.delete('/api/products/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await db.query('DELETE FROM product WHERE id = $1 RETURNING *', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        res.json({ message: 'Product deleted successfully', deletedProduct: result.rows[0] });
+    } catch (err) {
+        console.error(`Error deleting product with ID ${id}:`, err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+});
+
+// =================================================================
+//  ===> YOUR REVIEW CRUD OPERATIONS <===
+// =================================================================
+
+// POST a new review
+app.post('/api/reviews', async (req, res) => {
+    const { product_id, user_id, rating, comment } = req.body;
+    // Basic validation
+    if (!product_id || !user_id || !rating) {
+        return res.status(400).json({ error: 'Product ID, User ID, and Rating are required.' });
+    }
+    if (rating < 1 || rating > 5) {
+        return res.status(400).json({ error: 'Rating must be between 1 and 5.' });
+    }
+
+    try {
+        // Optional: Check if product_id and user_id exist in their respective tables
+        // For product_id:
+        const productExists = await db.query('SELECT id FROM product WHERE id = $1', [product_id]);
+        if (productExists.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found.' });
+        }
+        // For user_id (assuming users.id is int8):
+        const userExists = await db.query('SELECT id FROM users WHERE id = $1', [user_id]);
+        if (userExists.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+
+        const result = await db.query(
+            `INSERT INTO reviews (product_id, user_id, rating, comment, created_at)
+             VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
+            [product_id, user_id, rating, comment]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error adding new review:', err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+});
+
+// GET reviews for a specific product
+app.get('/api/products/:product_id/reviews', async (req, res) => {
+    const { product_id } = req.params;
+    try {
+        // Join with users table to get reviewer's username/name if needed
+        const result = await db.query(
+            `SELECT r.*, u.username AS reviewer_username, u.firstname AS reviewer_firstname
+             FROM reviews r
+             JOIN users u ON r.user_id = u.id -- Assuming users.id is the PK and matches reviews.user_id
+             WHERE r.product_id = $1 ORDER BY r.created_at DESC`,
+            [product_id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error(`Error fetching reviews for product ${product_id}:`, err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+});
+
+// DELETE a review (e.g., by review ID, for moderation or user self-deletion)
+app.delete('/api/reviews/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await db.query('DELETE FROM reviews WHERE id = $1 RETURNING *', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Review not found' });
+        }
+        res.json({ message: 'Review deleted successfully', deletedReview: result.rows[0] });
+    } catch (err) {
+        console.error(`Error deleting review with ID ${id}:`, err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+});
+
+// Calculate Average Rating for a Product
+app.get('/api/products/:product_id/averagerating', async (req, res) => {
+    const { product_id } = req.params;
+    try {
+        const result = await db.query(
+            `SELECT AVG(rating)::numeric(10, 2) AS average_rating, COUNT(id) AS total_reviews
+             FROM reviews WHERE product_id = $1`,
+            [product_id]
+        );
+        const { average_rating, total_reviews } = result.rows[0];
+        res.json({ product_id, average_rating: average_rating || '0.00', total_reviews: parseInt(total_reviews, 10) });
+    } catch (err) {
+        console.error(`Error calculating average rating for product ${product_id}:`, err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+});
+
+// =================================================================
+//  ===> YOUR STOCK MANAGEMENT / INVENTORY <===
+// =================================================================
+
+// Update Product Stock Status (for Inventory Management)
+// This endpoint also handles scheduled_stock_amount and scheduled_date
+app.put('/api/products/:id/stock', async (req, res) => {
+    const { id } = req.params;
+    const { stock_amt, scheduled_stock_amount = null, scheduled_date = null } = req.body;
+
+    const updates = [];
+    const params = [];
+    let paramIndex = 1;
+
+    if (stock_amt !== undefined && stock_amt >= 0) {
+        updates.push(`stock_amt = ${paramIndex++}`);
+        params.push(stock_amt);
+    } else if (stock_amt < 0) {
+        return res.status(400).json({ error: 'Invalid stock amount provided (cannot be negative).' });
+    }
+
+    updates.push(`scheduled_stock_amount = ${paramIndex++}`);
+    params.push(scheduled_stock_amount === '' ? null : scheduled_stock_amount);
+
+    updates.push(`scheduled_date = ${paramIndex++}`);
+    params.push(scheduled_date === '' ? null : scheduled_date);
+
+    if (updates.length === 0) {
+        return res.status(400).json({ error: 'No valid fields provided for update.' });
+    }
+
+    params.push(id);
+
+    try {
+        const result = await db.query(
+            `UPDATE product
+             SET ${updates.join(', ')}
+             WHERE id = ${paramIndex} RETURNING *`,
+            params
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(`Error updating stock for product ${id}:`, err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+});
 
 app.listen(5000, () => {
   console.log('Server running on port 5000');
