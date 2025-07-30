@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
 const CartPage = () => {
     const [cartItems, setCartItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const userId = localStorage.getItem('userId');
+    const navigate = useNavigate();
+
+    const [selectedItems, setSelectedItems] = useState({});
 
     const fetchCartItems = async () => {
         if (!userId) {
@@ -41,8 +45,31 @@ const CartPage = () => {
         }
     };
 
+    const handleCheckboxChange = (cartItemId) => {
+        setSelectedItems(prevSelectedItems => ({
+            ...prevSelectedItems,
+            [cartItemId]: !prevSelectedItems[cartItemId] // Toggle the boolean value
+        }));
+    };
+
     const calculateTotal = () => {
-        return cartItems.reduce((total, item) => total + parseFloat(item.price), 0).toFixed(2);
+        return cartItems
+            .filter(item => selectedItems[item.cart_item_id]) // Only include items where selected is true
+            .reduce((total, item) => total + parseFloat(item.price), 0)
+            .toFixed(2);
+    };
+
+    const handleProceedToCheckout = () => {
+        const itemsToCheckout = cartItems.filter(item => selectedItems[item.cart_item_id]);
+        
+        if (itemsToCheckout.length === 0) {
+            alert("Please select at least one item to check out.");
+            return;
+        }
+
+        // Use navigate to go to the checkout page and pass the selected items in the state.
+        // This is a clean way to pass data between routes without using localStorage.
+        navigate('/checkout', { state: { items: itemsToCheckout } });
     };
 
     if (loading) return <p>Loading your cart...</p>;
@@ -55,6 +82,12 @@ const CartPage = () => {
                 <div>
                     {cartItems.map(item => (
                         <div key={item.cart_item_id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #ccc', padding: '10px 0' }}>
+                            <input 
+                                type="checkbox" 
+                                checked={!!selectedItems[item.cart_item_id]} // Use !! to ensure it's always a boolean
+                                onChange={() => handleCheckboxChange(item.cart_item_id)}
+                                style={{ marginRight: '15px', transform: 'scale(1.5)' }}
+                            />
                             <img src={item.image_url || `https://placehold.co/100x100`} alt={item.title} style={{ width: '100px', height: '100px', objectFit: 'cover', marginRight: '20px' }} />
                             <div style={{ flexGrow: 1 }}>
                                 <h3>{item.title}</h3>
@@ -67,8 +100,8 @@ const CartPage = () => {
                         </div>
                     ))}
                     <div style={{ marginTop: '20px', textAlign: 'right' }}>
-                        <h2>Total: ${calculateTotal()}</h2>
-                        <button style={{ padding: '12px 24px', background: 'green', color: 'white', border: 'none', fontSize: '1.2em', cursor: 'pointer' }}>
+                        <h2>Subtotal: ${calculateTotal()}</h2>
+                        <button onClick={handleProceedToCheckout} style={{ padding: '12px 24px', background: 'green', color: 'white', border: 'none', fontSize: '1.2em', cursor: 'pointer' }}>
                             Proceed to Checkout
                         </button>
                     </div>

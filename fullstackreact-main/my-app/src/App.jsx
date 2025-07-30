@@ -14,8 +14,9 @@ import ChangePassword  from './pages/ChangePassword';
 import ViewUserProfile   from './pages/ViewUserProfile';
 import MarketplacePage   from './pages/MarketplacePage';
 import CreateProductPage from './pages/CreateProductPage'; // for marketplace listing
-import CartPage          from './pages/CartPage';
+import CartPage          from './Pages/CartPage';
 import PublicUserProfile from './Pages/PublicUserProfile';
+import CheckoutPage from './Pages/CheckoutPage'; // *** take note for whoever is doing the imports next time, if the imports got error just try renaming the routes cos sometimes its abit buggy
 
 // === Admin / Staff pages ===
 import UserManagement      from './pages/UserManagement';
@@ -79,7 +80,7 @@ const App = () => {
 
       <Routes>
         {/* Public / Auth */}
-        <Route path="/"                element={<MarketplacePage />} />
+        <Route path="/"                element={<MarketplacePage />} />  {/* <-- TEMPORARY PAGE ONLY */}
         <Route path="/login"           element={<LoginPage />} />
         <Route path="/register"        element={<RegisterPage />} />
         <Route path="/register2"       element={<RegisterPage2 />} />
@@ -91,6 +92,7 @@ const App = () => {
         <Route path="/marketplace"     element={<MarketplacePage />} />
         <Route path="/products/new"    element={<CreateProductPage />} />
         <Route path="/cart"            element={<CartPage />} />
+        <Route path="/checkout" element={<CheckoutPage />} />
         <Route path="/users/:userId"   element={<ViewUserProfile />} />
         <Route path="/user/:userId"    element={<PublicUserProfile />} />
 
