@@ -59,8 +59,7 @@
 }
 
 .navbar-logo {
-    height: 40px;
-    width: 40px;
+    width: 100px;
     border-radius: 8px;
     margin-right: 18px;
     object-fit: cover;

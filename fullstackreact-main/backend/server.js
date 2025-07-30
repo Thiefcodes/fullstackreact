@@ -462,23 +462,55 @@ app.delete('/api/users/:id', async (req, res) => {
         const userResult = await db.query('SELECT username FROM users WHERE id = $1', [userId]);
         const username = userResult.rows[0]?.username;
 
-        // 2. Delete reviews
-        await db.query('DELETE FROM reviews WHERE user_id = $1', [userId]);
-        // 3. Delete suspension history as user or as staff who suspended others
-        await db.query('DELETE FROM user_suspension_history WHERE user_id = $1', [userId]);
-        await db.query('DELETE FROM user_suspension_history WHERE suspended_by = $1', [userId]);
-        // 4. Delete user_active_status
-        await db.query('DELETE FROM user_active_status WHERE user_id = $1', [userId]);
-        // 5. Delete marketplaceorders as buyer
-        await db.query('DELETE FROM marketplaceorders WHERE buyer_id = $1', [userId]);
-        // 6. Delete marketplaceproducts as seller
-        await db.query('DELETE FROM marketplaceproducts WHERE seller_id = $1', [userId]);
-        // 7. Delete creditcards by username
+        // 2. Delete cart items
+        await db.query('DELETE FROM cart_items WHERE user_id = $1', [userId]);
+
+        // 3. Delete creditcards by username
         if (username) {
             await db.query('DELETE FROM creditcards WHERE username = $1', [username]);
         }
-        // 8. Delete user
+
+        // 4. Delete reviews by user
+        await db.query('DELETE FROM reviews WHERE user_id = $1', [userId]);
+
+        // 5. Delete user reports (as reporter or reported)
+        await db.query('DELETE FROM user_reports WHERE reporter_id = $1', [userId]);
+        await db.query('DELETE FROM user_reports WHERE reported_id = $1', [userId]);
+
+        // 6. Delete posts and forums by user
+        await db.query('DELETE FROM posts WHERE user_id = $1', [userId]);
+        await db.query('DELETE FROM forums WHERE created_by = $1', [userId]);
+
+        // 7. Delete suspension history as user or staff
+        await db.query('DELETE FROM user_suspension_history WHERE user_id = $1', [userId]);
+        await db.query('DELETE FROM user_suspension_history WHERE suspended_by = $1', [userId]);
+
+        // 8. Delete user_active_status
+        await db.query('DELETE FROM user_active_status WHERE user_id = $1', [userId]);
+
+        // 9. Delete order_items where order is by this user
+        const orderIds = await db.query('SELECT id FROM orders WHERE buyer_id = $1', [userId]);
+        const orderIdList = orderIds.rows.map(row => row.id);
+        if (orderIdList.length > 0) {
+            await db.query('DELETE FROM order_items WHERE order_id = ANY($1::int[])', [orderIdList]);
+        }
+
+        // 10. Delete orders (where user is buyer)
+        await db.query('DELETE FROM orders WHERE buyer_id = $1', [userId]);
+
+        // 11. Delete order_items for products sold by user (marketplaceproducts)
+        const mktProductIds = await db.query('SELECT id FROM marketplaceproducts WHERE seller_id = $1', [userId]);
+        const mktProductIdList = mktProductIds.rows.map(row => row.id);
+        if (mktProductIdList.length > 0) {
+            await db.query('DELETE FROM order_items WHERE product_id = ANY($1::int[])', [mktProductIdList]);
+        }
+
+        // 12. Delete listings the user is selling (marketplaceproducts only!)
+        await db.query('DELETE FROM marketplaceproducts WHERE seller_id = $1', [userId]);
+
+        // 14. Finally, delete the user
         await db.query('DELETE FROM users WHERE id = $1', [userId]);
+
         res.send('User deleted');
     } catch (err) {
         res.status(500).send(err.message || 'Error deleting user');

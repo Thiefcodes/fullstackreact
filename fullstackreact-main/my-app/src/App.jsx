@@ -42,7 +42,7 @@ const App = () => {
           <nav className="main-navbar">
               {/* Logo (always far left) */}
               <img
-                  src="https://placehold.co/48x48?text=LOGO"
+                  src="src/assets/EcoThrift-logo.png"
                   alt="Logo"
                   className="navbar-logo"
               />

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SuspendUserModal from '../components/SuspendUserModal';
 import ConfirmSuspendModal from '../components/ConfirmSuspendModal';
+import DeleteUserModal from '../components/DeleteUserModal';
+import Toast from '../components/Toast';
 
 // Placeholder images (update these URLs with real icons when ready)
 const infoIcon = 'https://placehold.co/24x24?text=I';
@@ -13,13 +15,14 @@ const UserManagement = () => {
     const [users, setUsers] = useState([]);
     const [sortOrder, setSortOrder] = useState('asc');
     const navigate = useNavigate();
-    const [successMsg, setSuccessMsg] = useState('');
+    const [toast, setToast] = useState({ open: false, message: '', type: 'success' });
     const [userStatuses, setUserStatuses] = useState([]);
     const [showSuspend, setShowSuspend] = useState(false);
     const [targetUser, setTargetUser] = useState(null);
     const [showConfirm, setShowConfirm] = useState(false);
     const [pendingSuspend, setPendingSuspend] = useState(null);
-    const [deletingUser, setDeletingUser] = useState(null);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [userToDelete, setUserToDelete] = useState(null);
 
 
     // Call this when clicking the suspend (gavel) icon:
@@ -38,24 +41,32 @@ const UserManagement = () => {
     const handleConfirmSuspend = async () => {
         const { user, duration, unit, reason } = pendingSuspend;
         const suspend_until = getSuspendUntil(duration, unit);
-        const staffId = localStorage.getItem('userId'); // Current staff/admin user
+        const staffId = localStorage.getItem('userId');
 
-        await fetch('http://localhost:5000/api/suspend_user', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: user.id,
-                suspend_until,
-                reason,
-                staff_id: staffId
-            })
-        });
-        setShowConfirm(false);
-        setPendingSuspend(null);
-        setSuccessMsg(`User ${user.username} suspended successfully!`);
-        setTimeout(() => setSuccessMsg(''), 5000);
+        try {
+            const res = await fetch('http://localhost:5000/api/suspend_user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: user.id,
+                    suspend_until,
+                    reason,
+                    staff_id: staffId
+                })
+            });
+            setShowConfirm(false);
+            setPendingSuspend(null);
 
-        refreshStatuses();
+            if (res.ok) {
+                setToast({ open: true, message: `User ${user.username} suspended successfully!`, type: 'success' });
+                refreshStatuses();
+            } else {
+                const msg = await res.text();
+                setToast({ open: true, message: msg || 'Failed to suspend user.', type: 'error' });
+            }
+        } catch (err) {
+            setToast({ open: true, message: 'Failed to suspend user.', type: 'error' });
+        }
     };
 
     const handleCancelConfirm = () => {
@@ -76,27 +87,6 @@ const UserManagement = () => {
         }
         return new Date(now.getTime() + ms).toISOString(); // or .toLocaleString()
     }
-
-    const handleDeleteUser = async (user) => {
-        if (!window.confirm(`Are you sure you want to delete user "${user.username}"? This cannot be undone.`)) return;
-        try {
-            const res = await fetch(`http://localhost:5000/api/users/${user.id}`, { method: 'DELETE' });
-            if (res.ok) {
-                setSuccessMsg(`User ${user.username} deleted.`);
-                // Refresh users and statuses
-                fetch('http://localhost:5000/api/users')
-                    .then(res => res.json())
-                    .then(data => setUsers(data));
-                fetch('http://localhost:5000/api/user_active_status')
-                    .then(res => res.json())
-                    .then(data => setUserStatuses(data));
-            } else {
-                alert(await res.text());
-            }
-        } catch (err) {
-            alert('Failed to delete user.');
-        }
-    };
 
     useEffect(() => {
         fetch('http://localhost:5000/api/users')
@@ -119,8 +109,13 @@ const UserManagement = () => {
     // Dummy sorting by user number (id or array order)
     const filteredUsers = users.filter(user => user.type === 'User');
     const sortedUsers = [...filteredUsers].sort((a, b) => {
-        if (sortOrder === 'asc') return a.id - b.id;
-        else return b.id - a.id;
+        switch (sortOrder) {
+            case 'num-asc': return a.id - b.id;
+            case 'num-desc': return b.id - a.id;
+            case 'name-asc': return a.username.localeCompare(b.username, undefined, { sensitivity: 'base' });
+            case 'email-asc': return a.email.localeCompare(b.email, undefined, { sensitivity: 'base' });
+            default: return a.id - b.id;
+        }
     });
 
     const usersWithStatus = sortedUsers.map(user => {
@@ -139,24 +134,12 @@ const UserManagement = () => {
                     onChange={e => setSortOrder(e.target.value)}
                     style={{ padding: 8, borderRadius: 20 }}
                 >
-                    <option value="asc">Number - Asc</option>
-                    <option value="desc">Number - Desc</option>
+                    <option value="num-asc">Number - Asc</option>
+                    <option value="num-desc">Number - Desc</option>
+                    <option value="name-asc">Alphabet - Name</option>
+                    <option value="email-asc">Alphabet - Email</option>
                 </select>
             </div>
-
-            {successMsg && (
-                <div style={{
-                    background: '#daf5d4',
-                    color: '#24682f',
-                    borderRadius: 8,
-                    padding: '14px 0',
-                    marginBottom: 20,
-                    fontWeight: 500,
-                    fontSize: 18
-                }}>
-                    {successMsg}
-                </div>
-            )}
 
             {/* Users Table */}
             <div style={{
@@ -188,7 +171,11 @@ const UserManagement = () => {
                                         opacity: isSuspended ? 0.6 : 1
                                     }}
                                 >
-                                    <td>{i + 1}</td>
+                                    <td>
+                                        {sortOrder === 'num-desc'
+                                            ? usersWithStatus.length - i
+                                            : i + 1}
+                                    </td>
                                     <td>{user.username}</td>
                                     <td>{user.email}</td>
                                     <td>
@@ -228,7 +215,10 @@ const UserManagement = () => {
                                                 filter: undefined,
                                                 opacity: 1
                                             }}
-                                            onClick={() => handleDeleteUser(user)}
+                                            onClick={() => {
+                                                setUserToDelete(user);
+                                                setShowDeleteModal(true);
+                                            }}
                                         />
                                     </td>
                                 </tr>
@@ -252,6 +242,42 @@ const UserManagement = () => {
                 unit={pendingSuspend?.unit || ''}
                 onConfirm={handleConfirmSuspend}
                 onCancel={handleCancelConfirm}
+            />
+            <DeleteUserModal
+                show={showDeleteModal}
+                user={userToDelete}
+                onCancel={() => {
+                    setShowDeleteModal(false);
+                    setUserToDelete(null);
+                }}
+                onConfirm={async () => {
+                    setShowDeleteModal(false);
+                    if (!userToDelete) return;
+                    try {
+                        const res = await fetch(`http://localhost:5000/api/users/${userToDelete.id}`, { method: 'DELETE' });
+                        if (res.ok) {
+                            setToast({ open: true, message: `User ${userToDelete.username} deleted.`, type: 'success' });
+                            // Refresh users and statuses
+                            fetch('http://localhost:5000/api/users')
+                                .then(res => res.json())
+                                .then(data => setUsers(data));
+                            fetch('http://localhost:5000/api/user_active_status')
+                                .then(res => res.json())
+                                .then(data => setUserStatuses(data));
+                        } else {
+                            setToast({ open: true, message: await res.text(), type: 'error' });
+                        }
+                    } catch (err) {
+                        setToast({ open: true, message: 'Failed to delete user.', type: 'error' });
+                    }
+                    setUserToDelete(null);
+                }}
+            />
+            <Toast
+                open={toast.open}
+                message={toast.message}
+                type={toast.type}
+                onClose={() => setToast(t => ({ ...t, open: false }))}
             />
         </div>
     );
