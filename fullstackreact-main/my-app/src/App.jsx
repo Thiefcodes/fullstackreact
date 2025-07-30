@@ -16,9 +16,9 @@ import UserManagement from './pages/UserManagement';
 import ViewUserProfile from './pages/ViewUserProfile';
 
 // ===> Jun Hong pages <===
-
 import MarketplacePage from './pages/MarketplacePage';
 import CreateProductPage from './pages/CreateProductPage';
+import CartPage from './pages/CartPage';
 
 const App = () => {
   // === THIS IS THE CORE LOGIC ===
@@ -49,6 +49,7 @@ const App = () => {
           <>
             <Link to="/products/new">List an Item</Link>
             <Link to="/profile">My Profile</Link>
+            <Link to="/cart">Cart</Link>
             <button onClick={handleLogout}>Logout</button>
           </>
         ) : (
@@ -75,6 +76,7 @@ const App = () => {
 
         <Route path="/marketplace" element={<MarketplacePage />} />
         <Route path="/products/new" element={<CreateProductPage />} />
+        <Route path="/cart" element={<CartPage />} />
       </Routes>
     </Router>
   );

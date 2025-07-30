@@ -411,7 +411,7 @@ app.delete('/api/users/:id', async (req, res) => {
 
 // jun hong's codes (marketplaceproducts GET and POST methods)
 // =================================================================
-//  ===> NEW: PRODUCT CATALOGUE MANAGEMENT ROUTES <===
+//  ===> PRODUCT CATALOGUE MANAGEMENT ROUTES <===
 // =================================================================
 
 /**
@@ -470,10 +470,83 @@ app.get('/api/marketplaceproducts', async (req, res) => {
     }
 });
 
-
 // =================================================================
 
+// jun hong's codes (cart_items GET and POST methods)
+// =================================================================
+//  ===> SHOPPING CART ROUTES <===
+// =================================================================
 
+/**
+ * @route   GET /api/cart/:userId
+ * @desc    Get all items in a user's cart
+ * @access  Private
+ */
+app.get('/api/cart/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const query = `
+            SELECT p.*, ci.id as cart_item_id FROM marketplaceproducts p
+            JOIN cart_items ci ON p.id = ci.product_id
+            WHERE ci.user_id = $1;
+        `;
+        const { rows } = await db.query(query, [userId]);
+        res.status(200).json(rows);
+    } catch (err) {
+        console.error('Error fetching cart:', err.message);
+        res.status(500).json({ error: 'Server error while fetching cart.' });
+    }
+});
+
+/**
+ * @route   POST /api/cart
+ * @desc    Add an item to a user's cart
+ * @access  Private
+ */
+app.post('/api/cart', async (req, res) => {
+    const { userId, productId } = req.body;
+    if (!userId || !productId) {
+        return res.status(400).json({ error: 'User ID and Product ID are required.' });
+    }
+    try {
+        const query = `
+            INSERT INTO cart_items (user_id, product_id)
+            VALUES ($1, $2)
+            RETURNING *;
+        `;
+        const { rows } = await db.query(query, [userId, productId]);
+        res.status(201).json(rows[0]);
+    } catch (err) {
+        // Handle the case where the item is already in the cart (violates UNIQUE constraint)
+        if (err.code === '23505') { // '23505' is the PostgreSQL code for unique_violation
+            return res.status(409).json({ error: 'Item is already in the cart.' });
+        }
+        console.error('Error adding to cart:', err.message);
+        res.status(500).json({ error: 'Server error while adding to cart.' });
+    }
+});
+
+/**
+ * @route   DELETE /api/cart/:userId/:productId
+ * @desc    Remove an item from a user's cart
+ * @access  Private
+ */
+app.delete('/api/cart/:userId/:productId', async (req, res) => {
+    const { userId, productId } = req.params;
+    try {
+        const query = `
+            DELETE FROM cart_items
+            WHERE user_id = $1 AND product_id = $2;
+        `;
+        await db.query(query, [userId, productId]);
+        res.status(200).json({ message: 'Item removed from cart.' });
+    } catch (err) {
+        console.error('Error removing from cart:', err.message);
+        res.status(500).json({ error: 'Server error while removing from cart.' });
+    }
+});
+
+// ================================================================
 
 app.listen(5000, () => {
   console.log('Server running on port 5000');
