@@ -12,6 +12,7 @@ const ViewUserProfile = () => {
     const [reports, setReports] = useState([]);
     const [selectedReport, setSelectedReport] = useState(null);
     const [showReportModal, setShowReportModal] = useState(false);
+    const [suspendUntil, setSuspendUntil] = useState(null);
 
     useEffect(() => {
         async function fetchUser() {
@@ -22,8 +23,10 @@ const ViewUserProfile = () => {
             const res = await fetch(`http://localhost:5000/api/user_active_status`);
             if (res.ok) {
                 const data = await res.json();
-                const statusObj = data.find(u => u.user_id === Number(userId));
+                const statusObj = data.find(u => String(u.user_id).trim() === String(userId).trim());
+
                 setUserStatus(statusObj?.status || 'active');
+                setSuspendUntil(statusObj?.suspend_until || null);
             }
         }
         async function fetchHistory() {
@@ -51,6 +54,22 @@ const ViewUserProfile = () => {
         fetchHistory();
     }, [userId]);
 
+    function getDurationText(suspendUntil) {
+        if (!suspendUntil) return null;
+        const until = new Date(suspendUntil);
+        const now = new Date();
+        const ms = until - now;
+        if (ms <= 0) return 'expired';
+
+        const hours = Math.floor(ms / (1000 * 60 * 60));
+        const minutes = Math.floor((ms / (1000 * 60)) % 60);
+        const days = Math.floor(hours / 24);
+
+        if (days > 0) return `${days} day${days > 1 ? 's' : ''}`;
+        if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''}`;
+        if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+        return '<1 min';
+    }
 
 
     if (!user) return <div>Loading...</div>;
@@ -81,6 +100,11 @@ const ViewUserProfile = () => {
                         <span className={`vup-status${userStatus === 'suspended' ? ' suspended' : ''}`}>
                             {userStatus || 'active'}
                         </span>
+                        {userStatus === 'suspended' && suspendUntil && (
+                            <span className="vup-suspend-duration">
+                                {getDurationText(suspendUntil)} left
+                            </span>
+                        )}
                     </p>
                     <p><strong>Address:</strong> {user.address}</p>
                     <p><strong>Country:</strong> {user.country}</p>
