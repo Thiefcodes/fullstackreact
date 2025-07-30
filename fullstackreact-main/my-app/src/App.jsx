@@ -1,6 +1,7 @@
 // src/App.jsx
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import './app.css'
 
 // === Auth / Public pages ===
 import LoginPage       from './pages/LoginPage';
@@ -38,45 +39,57 @@ const App = () => {
 
   return (
     <Router>
-      <nav style={{
-        padding: '1rem',
-        background: '#f0f0f0',
-        marginBottom: '1rem',
-        display: 'flex',
-        gap: '1rem',
-        alignItems: 'center'
-      }}>
-        <Link to="/marketplace">Marketplace</Link>
+          <nav className="main-navbar">
+              {/* Logo (always far left) */}
+              <img
+                  src="https://placehold.co/48x48?text=LOGO"
+                  alt="Logo"
+                  className="navbar-logo"
+              />
 
-        {!isLoggedIn && (
-          <>
-            {/* Guest */}
-            <Link to="/login">Login</Link>
-            <Link to="/register">Register</Link>
-          </>
-        )}
+              {/* Guest: marketplace left, login/register right */}
+              {!isLoggedIn && (
+                  <>
+                      <div className="navbar-group">
+                          <Link to="/marketplace">Marketplace</Link>
+                      </div>
+                      <div className="navbar-auth">
+                          <Link to="/login">Login</Link>
+                          <Link to="/register">Register</Link>
+                      </div>
+                  </>
+              )}
 
-        {isLoggedIn && userType === 'Staff' && (
-          <>
-            {/* Staff */}
-            <Link to="/products">Manage Products</Link>
-            <Link to="/inventory">Manage Inventory</Link>
-            <Link to="/usermanagement">Manage Users</Link>
-            <Link to="/approvallisting">Approve Listings</Link>
-            <button onClick={handleLogout}>Logout</button>
-          </>
-        )}
+              {/* User: all grouped left, logout right */}
+              {isLoggedIn && userType !== 'Staff' && (
+                  <>
+                      <div className="navbar-group">
+                          <Link to="/marketplace">Marketplace</Link>
+                          <Link to="/products/new">List an Item</Link>
+                          <Link to="/profile">My Profile</Link>
+                          <Link to="/cart">Cart</Link>
+                      </div>
+                      <div className="navbar-auth">
+                          <button className="logout-btn" onClick={handleLogout}>Logout</button>
+                      </div>
+                  </>
+              )}
 
-        {isLoggedIn && userType !== 'Staff' && (
-          <>
-            {/* Normal User */}
-            <Link to="/products/new">List an Item</Link>
-            <Link to="/profile">My Profile</Link>
-            <Link to="/cart">Cart</Link>
-            <button onClick={handleLogout}>Logout</button>
-          </>
-        )}
-      </nav>
+              {/* Staff: all grouped left, logout right, no marketplace */}
+              {isLoggedIn && userType === 'Staff' && (
+                  <>
+                      <div className="navbar-group">
+                          <Link to="/products">Manage Products</Link>
+                          <Link to="/inventory">Manage Inventory</Link>
+                          <Link to="/usermanagement">Manage Users</Link>
+                          <Link to="/approvallisting">Approve Listings</Link>
+                      </div>
+                      <div className="navbar-auth">
+                          <button className="logout-btn" onClick={handleLogout}>Logout</button>
+                      </div>
+                  </>
+              )}
+          </nav>
 
       <Routes>
         {/* Public / Auth */}

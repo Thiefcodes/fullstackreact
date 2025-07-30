@@ -1,9 +1,12 @@
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  width: 100%;
+  min-height: 100vh;
+  padding: 0;
+  text-align: unset;
+  box-sizing: border-box;
+  /* Remove max-width and center margin! */
 }
+
 
 .logo {
   height: 6em;
@@ -39,4 +42,82 @@
 
 .read-the-docs {
   color: #888;
+}
+
+.main-navbar {
+    display: flex;
+    align-items: center;
+    gap: 2.1rem;
+    padding: 0 2.5rem;
+    height: 60px;
+    background: #15342D;
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 50;
+    box-shadow: 0 2px 12px #0a1713cc;
+}
+
+.navbar-logo {
+    height: 40px;
+    width: 40px;
+    border-radius: 8px;
+    margin-right: 18px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.navbar-group {
+    display: flex;
+    gap: 18px;
+}
+
+.navbar-auth {
+    display: flex;
+    gap: 24px;
+    margin-left: auto;
+    align-items: center;
+}
+
+
+    .main-navbar a {
+        color: #fff;
+        text-decoration: none;
+        font-size: 1.09rem;
+        font-weight: 500;
+        letter-spacing: .02em;
+        padding: 7px 0;
+        transition: border-bottom 0.17s, color 0.13s;
+        border-bottom: 2px solid transparent;
+    }
+
+        .main-navbar a:hover,
+        .main-navbar a:focus {
+            color: #98ffe0;
+            border-bottom: 2px solid #41cba7;
+            outline: none;
+        }
+
+    .main-navbar .logout-btn {
+        margin-left: auto;
+        background: #1f5442;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 7px 18px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        box-shadow: 0 2px 8px #174d3d22;
+        transition: background 0.14s, color 0.14s;
+    }
+
+        .main-navbar .logout-btn:hover,
+        .main-navbar .logout-btn:focus {
+            background: #256b52;
+            color: #98ffe0;
+        }
+
+html, body {
+    margin: 0 !important;
 }
