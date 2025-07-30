@@ -31,7 +31,7 @@ const ProductCard = ({ product }) => {
 
     return (
         <div style={{ border: '1px solid #ccc', borderRadius: '8px', padding: '16px', margin: '8px', width: '250px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div style={{ border: '1px solid #ccc', borderRadius: '8px', padding: '16px', margin: '8px', width: '250px' }}>
+            <div>
                 {isVideo(displayMediaUrl) ? (
                     <video src={displayMediaUrl} style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: '4px', background: '#000' }} controls muted loop />
                 ) : (
