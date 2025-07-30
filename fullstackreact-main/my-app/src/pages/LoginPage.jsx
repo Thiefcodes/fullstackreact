@@ -101,12 +101,14 @@ const LoginPage = () => {
       if (data.type === 'User') {
         localStorage.setItem('username', data.username);
         localStorage.setItem('userId', data.id); // Correctly access data.id
+        localStorage.setItem('userType', data.type); // where data.type is 'staff' or 'User'    
         // We use window.location.href to force a full page refresh.
         // This ensures the navigation bar in App.jsx re-renders and updates.
         window.location.href = '/profile';
       } else if (data.type === 'Staff') {
         localStorage.setItem('username', data.username);
         localStorage.setItem('userId', data.id); // Correctly access data.id
+        localStorage.setItem('userType', data.type); // where data.type is 'staff' or 'User'
         window.location.href = '/staffdashboard';
       }
       
