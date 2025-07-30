@@ -1,0 +1,192 @@
+/* ViewUserProfile.css */
+
+.vup-container {
+    padding: 40px;
+    max-width: 960px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center; 
+}
+
+.vup-back-btn {
+    font-size: 24px;
+    margin-bottom: 18px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: #333;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+}
+
+.vup-title {
+    font-size: 28px;
+    margin-bottom: 24px;
+    letter-spacing: 0.2px;
+}
+
+.vup-profile-card {
+    display: flex;
+    align-items: center;
+    background: #fff;
+    border-radius: 20px;
+    padding: 36px;
+    margin-bottom: 32px;
+    max-width: 800px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.05);
+}
+
+.vup-profile-img {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    margin-right: 48px;
+    object-fit: cover;
+    border: 4px solid #e2e8f0;
+}
+
+.vup-profile-info p {
+    margin-bottom: 8px;
+}
+
+.vup-status {
+    background: #c6efce;
+    color: #388e3c;
+    padding: 3px 18px;
+    border-radius: 7px;
+    font-weight: 600;
+    text-transform: lowercase;
+    letter-spacing: 0.2px;
+}
+
+    .vup-status.suspended {
+        background: #fde0dd;
+        color: #d32f2f;
+    }
+
+.vup-panel {
+    background: #fff;
+    border-radius: 20px;
+    padding: 36px;
+    margin-bottom: 30px;
+    max-width: 800px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.05);
+}
+
+.vup-panel-title {
+    text-align: center;
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+.vup-empty {
+    text-align: center;
+    color: #bbb;
+    padding: 16px;
+    font-size: 16px;
+}
+
+.vup-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 16px;
+    margin-top: 20px;
+}
+
+    .vup-table th {
+        padding-bottom: 10px;
+        border-bottom: 2px solid #ddd;
+        text-align: left;
+        font-weight: 600;
+        background: #f9f9f9;
+    }
+
+    .vup-table td {
+        padding: 10px 8px;
+        border-bottom: 1px solid #eee;
+    }
+
+.vup-reports-panel {
+    background: #fff;
+    border-radius: 20px;
+    padding: 36px;
+    max-width: 800px;
+    margin-top: 18px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.05);
+}
+
+.vup-reports-scroll {
+    overflow-y: auto;
+    margin-top: 14px;
+    border-radius: 8px;
+    border: 1px solid #eee;
+    background: #fafafa;
+    padding: 14px 18px;
+    max-height: 288px;
+}
+
+
+.vup-report-action-img {
+    cursor: pointer;
+    vertical-align: middle;
+    opacity: 0.85;
+    transition: opacity 0.2s;
+}
+
+    .vup-report-action-img:hover {
+        opacity: 1;
+    }
+
+.vup-profile-card,
+.vup-panel,
+.vup-reports-panel {
+    width: 100%;
+    max-width: 800px;
+}
+
+.vup-back-btn-row {
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+}
+
+.vup-suspensions-scroll {
+    overflow-y: auto;
+    margin-top: 20px;
+    border-radius: 8px;
+    border: 1px solid #eee;
+    background: #fafafa;
+    padding: 14px 18px;
+    max-height: 288px;
+}
+
+.vup-table td {
+    height: 48px;
+}
+
+    .vup-table th.vup-col-no,
+    .vup-table td.vup-col-no {
+        width: 48px;
+        min-width: 40px;
+        text-align: left;
+    }
+
+    .vup-table th.vup-col-start,
+    .vup-table td.vup-col-start,
+    .vup-table th.vup-col-end,
+    .vup-table td.vup-col-end {
+        width: 210px;
+        min-width: 170px;
+        white-space: nowrap;
+        text-align: left;
+    }
+
+    .vup-table th.vup-col-reason,
+    .vup-table td.vup-col-reason {
+        /* Flexible width, wrap if too long */
+        word-break: break-word;
+        white-space: normal;
+        text-align: left;
+    }
