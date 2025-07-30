@@ -81,6 +81,14 @@ app.post('/api/register', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [username, password, type, firstname, lastname, phone, address, country, profilepic, email]
     );
+
+    const newUser = await db.query('SELECT id FROM users WHERE username = $1', [username]);
+    const userId = newUser.rows[0].id;
+
+    await db.query(
+      `INSERT INTO user_active_status (user_id, status) VALUES ($1, 'active')`,
+      [userId]
+    );
     res.send('User registered');
   } catch (err) {
     res.status(500).send(err?.detail || err.message || 'Registration error');
@@ -89,27 +97,35 @@ app.post('/api/register', async (req, res) => {
 
 
 
-// Add this to server.js:
+// Add this to your server.js (replace your existing /api/users route)
 app.get('/api/users', async (req, res) => {
-  const { username } = req.query;
-  if (username) {
-    try {
-      const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
-      if (result.rows.length === 0) return res.status(404).send('User not found');
-      res.json(result.rows[0]);
-    } catch (err) {
-      res.status(500).send(err);
+    const { username, id } = req.query;
+    if (username) {
+        try {
+            const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
+            if (result.rows.length === 0) return res.status(404).send('User not found');
+            res.json(result.rows[0]);
+        } catch (err) {
+            res.status(500).send(err);
+        }
+    } else if (id) {
+        try {
+            const result = await db.query('SELECT * FROM users WHERE id = $1', [id]);
+            if (result.rows.length === 0) return res.status(404).send('User not found');
+            res.json(result.rows[0]);
+        } catch (err) {
+            res.status(500).send(err);
+        }
+    } else {
+        try {
+            const result = await db.query('SELECT * FROM users');
+            res.json(result.rows);
+        } catch (err) {
+            res.status(500).send(err);
+        }
     }
-  } else {
-    // default: return all users
-    try {
-      const result = await db.query('SELECT * FROM users');
-      res.json(result.rows);
-    } catch (err) {
-      res.status(500).send(err);
-    }
-  }
 });
+
 
 
 app.post('/api/login', async (req, res) => {
@@ -310,6 +326,88 @@ app.post('/api/mixmatch', async (req, res) => {
     res.status(500).send('Error generating mix and match');
   }
 });
+
+app.post('/api/suspend_user', async (req, res) => {
+    const { user_id, suspend_until, reason, staff_id } = req.body;
+    if (!user_id || !suspend_until || !staff_id) return res.status(400).send('Missing data');
+    try {
+        // 1. Update active status
+        await db.query(`
+      INSERT INTO user_active_status (user_id, status, suspend_until, reason)
+      VALUES ($1, 'suspended', $2, $3)
+      ON CONFLICT (user_id) DO UPDATE SET
+      status='suspended', suspend_until=$2, reason=$3
+    `, [user_id, suspend_until, reason || null]);
+
+        // 2. Insert into suspension history
+        await db.query(`
+      INSERT INTO user_suspension_history (user_id, suspended_by, start_time, end_time, reason)
+      VALUES ($1, $2, NOW(), $3, $4)
+    `, [user_id, staff_id, suspend_until, reason || null]);
+
+        res.send('User suspended and logged in history');
+    } catch (err) {
+        res.status(500).send(err.message || 'Error suspending user');
+    }
+});
+
+// Add this to your backend (server.js)
+app.get('/api/user_active_status', async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM user_active_status');
+        res.json(result.rows); // This returns an array like the example you posted!
+    } catch (err) {
+        res.status(500).send(err.message || 'Error');
+    }
+});
+
+// Add to server.js if not already present:
+app.get('/api/user_suspension_history', async (req, res) => {
+    const { user_id } = req.query;
+    if (!user_id) return res.status(400).send('user_id required');
+    try {
+        const result = await db.query(
+            'SELECT * FROM user_suspension_history WHERE user_id = $1 ORDER BY start_time DESC',
+            [user_id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).send(err.message || 'Error');
+    }
+});
+
+// Delete user and their status/history (and maybe other related info)
+app.delete('/api/users/:id', async (req, res) => {
+    const userId = req.params.id;
+    try {
+        // 1. Get username for creditcard deletion
+        const userResult = await db.query('SELECT username FROM users WHERE id = $1', [userId]);
+        const username = userResult.rows[0]?.username;
+
+        // 2. Delete reviews
+        await db.query('DELETE FROM reviews WHERE user_id = $1', [userId]);
+        // 3. Delete suspension history as user or as staff who suspended others
+        await db.query('DELETE FROM user_suspension_history WHERE user_id = $1', [userId]);
+        await db.query('DELETE FROM user_suspension_history WHERE suspended_by = $1', [userId]);
+        // 4. Delete user_active_status
+        await db.query('DELETE FROM user_active_status WHERE user_id = $1', [userId]);
+        // 5. Delete marketplaceorders as buyer
+        await db.query('DELETE FROM marketplaceorders WHERE buyer_id = $1', [userId]);
+        // 6. Delete marketplaceproducts as seller
+        await db.query('DELETE FROM marketplaceproducts WHERE seller_id = $1', [userId]);
+        // 7. Delete creditcards by username
+        if (username) {
+            await db.query('DELETE FROM creditcards WHERE username = $1', [username]);
+        }
+        // 8. Delete user
+        await db.query('DELETE FROM users WHERE id = $1', [userId]);
+        res.send('User deleted');
+    } catch (err) {
+        res.status(500).send(err.message || 'Error deleting user');
+    }
+});
+
+
 
 // jun hong's codes (marketplaceproducts GET and POST methods)
 // =================================================================
