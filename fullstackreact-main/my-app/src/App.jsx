@@ -1,5 +1,5 @@
 // src/App.jsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './app.css'
 
@@ -31,6 +31,17 @@ import Logo from "./assets/EcoThrift-logo.png";
 const App = () => {
   const isLoggedIn = !!localStorage.getItem('userId');
   const userType   = localStorage.getItem('userType');
+  const [user, setUser] = useState(null);
+  const username = localStorage.getItem('username') || '';
+
+  useEffect(() => {
+    async function fetchUser() {
+      if (!username) return;
+      const res = await fetch(`http://localhost:5000/api/users?username=${username}`);
+      if (res.ok) setUser(await res.json());
+    }
+    fetchUser();
+  }, [username]);
 
   const handleLogout = () => {
     localStorage.removeItem('userId');
@@ -63,7 +74,7 @@ const App = () => {
               )}
 
               {/* User: all grouped left, logout right */}
-              {isLoggedIn && userType !== 'Staff' && (
+              {isLoggedIn && userType !== 'Staff' && user && (
                   <>
                       <div className="navbar-group">
                           <Link to="/marketplace">Marketplace</Link>
@@ -71,7 +82,12 @@ const App = () => {
                           <Link to="/profile">My Profile</Link>
                           <Link to="/cart">Cart</Link>
                       </div>
-                      <div className="navbar-auth">
+                      <div className="navbar-usergroup">
+                          <img
+                              src={user.profilepic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.firstname || user.username)}
+                              alt="Profile"
+                              className="navbar-profile-pic"
+                          />
                           <button className="logout-btn" onClick={handleLogout}>Logout</button>
                       </div>
                   </>
