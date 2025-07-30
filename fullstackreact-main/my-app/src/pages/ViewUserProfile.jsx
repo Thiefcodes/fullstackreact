@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import ReportInfoModal from '../components/ReportInfoModal';
 
 const ViewUserProfile = () => {
     const { userId } = useParams();
@@ -7,6 +8,9 @@ const ViewUserProfile = () => {
     const [user, setUser] = useState(null);
     const [userStatus, setUserStatus] = useState('active');
     const [suspensionHistory, setSuspensionHistory] = useState([]);
+    const [reports, setReports] = useState([]);
+    const [selectedReport, setSelectedReport] = useState(null);
+    const [showReportModal, setShowReportModal] = useState(false);
 
     useEffect(() => {
         async function fetchUser() {
@@ -27,7 +31,20 @@ const ViewUserProfile = () => {
                 setSuspensionHistory(await res.json());
             }
         }
+        async function fetchReports() {
+            try {
+                const res = await fetch(`http://localhost:5000/api/user_reports?reported_id=${userId}`);
+                if (res.ok) {
+                    setReports(await res.json());
+                } else {
+                    setReports([]);
+                }
+            } catch {
+                setReports([]);
+            }
+        }
 
+        fetchReports();
         fetchUser();
         fetchStatus();
         fetchHistory();
@@ -102,11 +119,71 @@ const ViewUserProfile = () => {
                 )}
             </div>
 
-            {/* Placeholder for reports */}
-            <div style={{ background: '#fff', borderRadius: 20, padding: 36, maxWidth: 800 }}>
-                <h2 style={{ textAlign: 'center' }}>Reports</h2>
-                <div style={{ textAlign: 'center', color: '#bbb' }}>[Reports table placeholder]</div>
+            <div
+                style={{
+                    background: '#fff',
+                    borderRadius: 20,
+                    padding: 36,
+                    maxWidth: 800,
+                    marginTop: 18,
+                }}
+            >
+                <h2 style={{ textAlign: 'center', marginTop: 0 }}>Reports</h2>
+                <div style={{
+                    maxHeight: 260,       // Scroll if many reports
+                    overflowY: 'auto',
+                    marginTop: 14,
+                    borderRadius: 8,
+                    border: '1px solid #eee',
+                    background: '#fafafa'
+                }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                            <tr>
+                                <th style={{ textAlign: 'left', width: 48, padding: '10px 8px' }}>No.</th>
+                                <th style={{ textAlign: 'left', padding: '10px 8px' }}>Name</th>
+                                <th style={{ textAlign: 'left', padding: '10px 8px' }}>Reason</th>
+                                <th style={{ textAlign: 'center', width: 60, padding: '10px 8px' }}>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {reports.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} style={{ color: '#bbb', textAlign: 'center', padding: 22 }}>
+                                        [No reports]
+                                    </td>
+                                </tr>
+                            ) : (
+                                reports.map((rep, idx) => (
+                                    <tr key={rep.id} style={{ borderBottom: '1px solid #eee' }}>
+                                        <td style={{ padding: '10px 8px' }}>{idx + 1}</td>
+                                        <td style={{ padding: '10px 8px' }}>
+                                            {rep.reporter_firstname || ''} {rep.reporter_lastname || rep.reporter_username || ''}
+                                        </td>
+                                        <td style={{ padding: '10px 8px' }}>{rep.reason}</td>
+                                        <td style={{ textAlign: 'center' }}>
+                                            <img
+                                                src="https://placehold.co/24x24?text=i"
+                                                alt="View Details"
+                                                style={{ cursor: 'pointer', verticalAlign: 'middle' }}
+                                                onClick={() => {
+                                                    setSelectedReport(rep);
+                                                    setShowReportModal(true);
+                                                }}
+                                            />
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
+            <ReportInfoModal
+                show={showReportModal}
+                report={selectedReport}
+                onClose={() => setShowReportModal(false)}
+            />
         </div>
     );
 };

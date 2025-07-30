@@ -20,7 +20,7 @@ export default function Toast({ open, message, type = 'success', onClose, durati
     return (
         <div style={{
             position: 'fixed',
-            bottom: 36,
+            top: 36,
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 9999,

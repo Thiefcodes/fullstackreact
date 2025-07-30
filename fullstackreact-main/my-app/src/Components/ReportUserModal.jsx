@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function ReportUserModal({ show, onClose, reportedId, onSuccess }) {
+function ReportUserModal({ show, onClose, reportedId, onSuccess, showToast }) {
     const [reason, setReason] = useState('');
     const [additionalInfo, setAdditionalInfo] = useState('');
     const [loading, setLoading] = useState(false);
@@ -43,15 +43,17 @@ function ReportUserModal({ show, onClose, reportedId, onSuccess }) {
                 })
             });
             if (res.ok) {
+                showToast('Report submitted!', 'success'); // <-- toast, not alert!
                 onSuccess && onSuccess();
                 onClose();
                 setReason('');
                 setAdditionalInfo('');
             } else {
-                setError(await res.text());
+                const msg = await res.text();
+                showToast(msg || 'Failed to submit report', 'error'); // <-- toast
             }
         } catch (err) {
-            setError('Failed to submit report');
+            showToast('Failed to submit report', 'error'); // <-- toast
         }
         setLoading(false);
     };
@@ -132,3 +134,4 @@ function ReportUserModal({ show, onClose, reportedId, onSuccess }) {
 }
 
 export default ReportUserModal;
+    

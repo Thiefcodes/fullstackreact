@@ -2,16 +2,21 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReportUserModal from '../components/ReportUserModal';
+import Toast from '../components/Toast';
 
 const PublicUserProfile = () => {
     const { userId } = useParams();
     const navigate = useNavigate();
     const [user, setUser] = useState(null);
     const [showReportModal, setShowReportModal] = useState(false);
+    const [toast, setToast] = useState({ open: false, message: '', type: 'success' });
 
     // Placeholder for report icon (replace src later)
     const reportIcon = 'https://placehold.co/32x32?text=!';
 
+    const showToast = (message, type = 'success') => {
+        setToast({ open: true, message, type });
+    };
 
     useEffect(() => {
         async function fetchUser() {
@@ -76,11 +81,18 @@ const PublicUserProfile = () => {
                 <h2 style={{ textAlign: 'center' }}>User's Listings</h2>
                 <div style={{ textAlign: 'center', color: '#bbb' }}>[User's marketplace/product listings go here]</div>
             </div>
+            <Toast
+                open={toast.open}
+                message={toast.message}
+                type={toast.type}
+                onClose={() => setToast(t => ({ ...t, open: false }))}
+            />
             <ReportUserModal
                 show={showReportModal}
                 onClose={() => setShowReportModal(false)}
                 reportedId={user.id}
-                onSuccess={() => alert('Report submitted!')}
+                onSuccess={() => {/* anything else */ }}
+                showToast={showToast}
             />
         </div>
     );
