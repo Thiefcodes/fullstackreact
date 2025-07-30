@@ -446,22 +446,41 @@ app.post('/api/marketplaceproducts', async (req, res) => {
 
 /**
  * @route   GET /api/marketplaceproducts
- * @desc    Get all available products from the marketplace
+ * @desc    Get all available products, optionally excluding a specific user's items.
  * @access  Public
  */
 app.get('/api/marketplaceproducts', async (req, res) => {
-    try {
-        // We join with the users table to get the seller's username for each product.
-        // This is more efficient than making a separate DB call for each product.
-        const getProductsQuery = `
-            SELECT p.*, u.username AS seller_name
-            FROM marketplaceproducts p
-            JOIN users u ON p.seller_id = u.id
-            WHERE p.status = 'available'
-            ORDER BY p.created_at DESC;
-        `;
+    // Get the optional userId to exclude from the query parameters.
+    const { excludeUserId } = req.query;
 
-        const result = await db.query(getProductsQuery);
+    try {
+        let getProductsQuery;
+        const queryParams = [];
+
+        // === THIS IS THE CORE LOGIC ===
+        // We dynamically build the SQL query based on whether excludeUserId was provided.
+        if (excludeUserId) {
+            // If we need to exclude a user, add a WHERE clause to filter by seller_id.
+            getProductsQuery = `
+                SELECT p.*, u.username AS seller_name
+                FROM marketplaceproducts p
+                LEFT JOIN users u ON p.seller_id = u.id
+                WHERE p.status = 'available' AND p.seller_id != $1
+                ORDER BY p.created_at DESC;
+            `;
+            queryParams.push(excludeUserId);
+        } else {
+            // If no user to exclude (e.g., a guest is browsing), run the original query.
+            getProductsQuery = `
+                SELECT p.*, u.username AS seller_name
+                FROM marketplaceproducts p
+                LEFT JOIN users u ON p.seller_id = u.id
+                WHERE p.status = 'available'
+                ORDER BY p.created_at DESC;
+            `;
+        }
+
+        const result = await db.query(getProductsQuery, queryParams);
         res.status(200).json(result.rows);
 
     } catch (err) {

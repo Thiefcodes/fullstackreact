@@ -52,15 +52,27 @@ const MarketplacePage = () => {
     useEffect(() => {
         const fetchProducts = async () => {
             try {
-                // Make a GET request to our new backend endpoint
-                const response = await axios.get('http://localhost:5000/api/marketplaceproducts');
-                setProducts(response.data); // Store the fetched products in state
+                // === THIS IS THE CORE LOGIC ===
+                // 1. Get the logged-in user's ID from localStorage.
+                const userId = localStorage.getItem('userId');
+
+                // 2. Construct the base API URL.
+                let apiUrl = 'http://localhost:5000/api/marketplaceproducts';
+
+                // 3. If a user is logged in, add their ID as a query parameter to exclude their listings.
+                if (userId) {
+                    apiUrl += `?excludeUserId=${userId}`;
+                }
+
+                // 4. Make the GET request to the constructed URL.
+                const response = await axios.get(apiUrl);
+                setProducts(response.data);
                 setError(null);
             } catch (err) {
                 console.error("Error fetching products:", err);
                 setError('Failed to load products. Please try again later.');
             } finally {
-                setLoading(false); // Stop loading, whether successful or not
+                setLoading(false);
             }
         };
 
