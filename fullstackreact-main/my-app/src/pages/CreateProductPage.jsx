@@ -9,7 +9,7 @@ const CreateProductPage = () => {
         description: '',
         price: '',
         category: 'Tops', // Default value
-        size: '',
+        size: 'XS',
         image_url: ''
     });
     const [error, setError] = useState('');
@@ -84,7 +84,14 @@ const CreateProductPage = () => {
                 </div>
                 <div style={{ marginBottom: '15px' }}>
                     <label>Size</label>
-                    <input type="text" name="size" value={formData.size} onChange={handleChange} style={{ width: '100%', padding: '8px' }} />
+                    <select name="size" value={formData.size} onChange={handleChange} required style={{ width: '100%', padding: '8px' }}>
+                        <option value="XS">XS</option>
+                        <option value="S">S</option>
+                        <option value="M">M</option>
+                        <option value="L">L</option>
+                        <option value="XL">XL</option>
+                        <option value="XXL">XXL</option>
+                    </select>
                 </div>
                  <div style={{ marginBottom: '15px' }}>
                     <label>Image URL (Optional)</label>
