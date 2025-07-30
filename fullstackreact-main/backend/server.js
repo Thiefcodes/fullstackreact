@@ -18,6 +18,38 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+
+// ============ JH multer codes =================
+const productMediaStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    // We'll save product media to a dedicated subfolder to keep things organized.
+    cb(null, 'uploads/products/');
+  },
+  filename: function (req, file, cb) {
+    // To prevent filename conflicts, we'll use a unique name: timestamp + original filename.
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+const productMediaUpload = multer({ storage: productMediaStorage });
+
+app.use('/uploads/products', express.static('uploads/products'));
+
+app.post('/api/product-media/upload', productMediaUpload.array('productMedia', 5), (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).send('No files uploaded.');
+  }
+  // Map over the array of uploaded files to create an array of their URLs.
+  const fileUrls = req.files.map(file => 
+    `${req.protocol}://${req.get('host')}/uploads/products/${file.filename}`
+  );
+  // Send the array of URLs back to the frontend.
+  res.json({ urls: fileUrls });
+});
+
+// =============================
+
+
 // Multer storage to use username as filename
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {

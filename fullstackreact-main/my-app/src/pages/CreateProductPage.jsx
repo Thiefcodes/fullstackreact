@@ -10,10 +10,11 @@ const CreateProductPage = () => {
         price: '',
         category: 'Tops', // Default value
         size: 'XS',
-        image_url: ''
     });
+    const [mediaFiles, setMediaFiles] = useState([]);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -23,10 +24,15 @@ const CreateProductPage = () => {
         }));
     };
 
+    const handleFileChange = (e) => {
+        setMediaFiles(e.target.files);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setSuccess('');
+        setIsSubmitting(true);
 
         // --- IMPORTANT ---
         // We need the ID of the logged-in user to set as 'seller_id'.
@@ -39,7 +45,22 @@ const CreateProductPage = () => {
         }
 
         try {
-            const productData = { ...formData, seller_id: userId };
+            let uploadedImageUrls = [];
+
+            if (mediaFiles.length > 0) {
+                const uploadFormData = new FormData();
+                for (let i = 0; i < mediaFiles.length; i++) {
+                    // Use 'productMedia' as the field name, matching the backend multer config.
+                    uploadFormData.append('productMedia', mediaFiles[i]);
+                }
+                
+                const uploadResponse = await axios.post('http://localhost:5000/api/product-media/upload', uploadFormData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                uploadedImageUrls = uploadResponse.data.urls;
+            }
+
+            const productData = { ...formData, seller_id: userId, image_url: uploadedImageUrls };
 
             // Make a POST request to our new backend endpoint
             await axios.post('http://localhost:5000/api/marketplaceproducts', productData);
@@ -93,11 +114,20 @@ const CreateProductPage = () => {
                         <option value="XXL">XXL</option>
                     </select>
                 </div>
-                 <div style={{ marginBottom: '15px' }}>
-                    <label>Image URL (Optional)</label>
-                    <input type="text" name="image_url" value={formData.image_url} onChange={handleChange} style={{ width: '100%', padding: '8px' }} />
+                <div style={{ marginBottom: '15px' }}>
+                    <label>Product Images/Videos</label>
+                    <input 
+                        type="file" 
+                        name="productMedia" 
+                        multiple // Allow multiple files to be selected
+                        onChange={handleFileChange} 
+                        accept="image/*,video/*" // Accept images and videos
+                        style={{ width: '100%', padding: '8px' }} 
+                    />
                 </div>
-                <button type="submit" style={{ padding: '10px 20px', cursor: 'pointer' }}>List Item</button>
+                <button type="submit" disabled={isSubmitting} style={{ padding: '10px 20px', cursor: 'pointer' }}>
+                    {isSubmitting ? 'Submitting...' : 'List Item'}
+                </button>
             </form>
             {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
             {success && <p style={{ color: 'green', marginTop: '10px' }}>{success}</p>}

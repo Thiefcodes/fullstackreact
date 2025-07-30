@@ -4,8 +4,11 @@ import axios from 'axios';
 // This is a simple component for displaying a single product card.
 // We can keep it in the same file for simplicity or move it to its own file later.
 const ProductCard = ({ product }) => {
-    // Fallback image in case product.image_url is missing
-    const imageUrl = product.image_url || `https://placehold.co/600x400/EEE/31343C?text=${product.title}`;
+    const displayMediaUrl = (product.image_url && product.image_url.length > 0)
+        ? product.image_url[0]
+        : `https://placehold.co/600x400/EEE/31343C?text=No+Image`;
+
+    const isVideo = (url) => url.match(/\.(mp4|webm|ogg)$/i);
 
     const handleAddToCart = async () => {
         const userId = localStorage.getItem('userId');
@@ -29,7 +32,11 @@ const ProductCard = ({ product }) => {
     return (
         <div style={{ border: '1px solid #ccc', borderRadius: '8px', padding: '16px', margin: '8px', width: '250px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div style={{ border: '1px solid #ccc', borderRadius: '8px', padding: '16px', margin: '8px', width: '250px' }}>
-                <img src={imageUrl} alt={product.title} style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: '4px' }} />
+                {isVideo(displayMediaUrl) ? (
+                    <video src={displayMediaUrl} style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: '4px', background: '#000' }} controls muted loop />
+                ) : (
+                    <img src={displayMediaUrl} alt={product.title} style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: '4px' }} />
+                )}
                 <h3 style={{ fontSize: '1.2em', margin: '12px 0 4px 0' }}>{product.title}</h3>
                 <p style={{ fontSize: '1.1em', fontWeight: 'bold', margin: '0' }}>${product.price}</p>
                 <p style={{ color: '#555', margin: '4px 0' }}>Size: {product.size || 'N/A'}</p>
