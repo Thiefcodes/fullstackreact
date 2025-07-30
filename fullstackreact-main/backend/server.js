@@ -383,7 +383,7 @@ app.post('/api/suspend_user', async (req, res) => {
     }
 });
 
-// Add this to your backend (server.js)
+
 app.get('/api/user_active_status', async (req, res) => {
     try {
         const result = await db.query('SELECT * FROM user_active_status');
@@ -393,7 +393,6 @@ app.get('/api/user_active_status', async (req, res) => {
     }
 });
 
-// Add to server.js if not already present:
 app.get('/api/user_suspension_history', async (req, res) => {
     const { user_id } = req.query;
     if (!user_id) return res.status(400).send('user_id required');
@@ -439,6 +438,52 @@ app.delete('/api/users/:id', async (req, res) => {
     }
 });
 
+app.post('/api/user_reports', async (req, res) => {
+    const { reporter_id, reported_id, reason, additional_info } = req.body;
+    if (!reporter_id || !reported_id || !reason) {
+        return res.status(400).send('Missing required fields');
+    }
+    try {
+        await db.query(
+            `INSERT INTO user_reports (reporter_id, reported_id, reason, additional_info)
+             VALUES ($1, $2, $3, $4)`,
+            [reporter_id, reported_id, reason, additional_info || null]
+        );
+        res.send('Report submitted');
+    } catch (err) {
+        if (err.code === '23505') { // Unique violation
+            return res.status(409).send('You have already reported this user.');
+        }
+        res.status(500).send(err.message || 'Error submitting report');
+    }
+});
+
+app.get('/api/user_reports', async (req, res) => {
+    const { reported_id } = req.query;
+    try {
+        let result;
+        if (reported_id) {
+            result = await db.query(
+                `SELECT r.*, u.username as reporter_username, u.firstname as reporter_firstname, u.lastname as reporter_lastname
+                 FROM user_reports r
+                 JOIN users u ON r.reporter_id = u.id
+                 WHERE r.reported_id = $1
+                 ORDER BY r.created_at DESC`,
+                [reported_id]
+            );
+        } else {
+            result = await db.query(
+                `SELECT r.*, u.username as reporter_username, u.firstname as reporter_firstname, u.lastname as reporter_lastname
+                 FROM user_reports r
+                 JOIN users u ON r.reporter_id = u.id
+                 ORDER BY r.created_at DESC`
+            );
+        }
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).send(err.message || 'Error fetching reports');
+    }
+});
 
 
 // jun hong's codes (marketplaceproducts GET and POST methods)

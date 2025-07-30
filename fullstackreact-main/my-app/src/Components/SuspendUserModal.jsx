@@ -107,7 +107,7 @@ export default function SuspendUserModal({ show, onClose, user, onSuspend }) {
                     type="submit"
                     disabled={!canSuspend}
                     style={{
-                        background: canSuspend ? '#fa9a9a' : '#ffd1d1',
+                        background: canSuspend ? '#d32f2f' : '#ffd1d1',
                         color: '#fff',
                         border: 'none',
                         borderRadius: 7,
@@ -115,7 +115,9 @@ export default function SuspendUserModal({ show, onClose, user, onSuspend }) {
                         fontSize: 18,
                         fontWeight: 500,
                         cursor: canSuspend ? 'pointer' : 'not-allowed',
-                        float: 'right'
+                        float: 'right',
+                        boxShadow: canSuspend ? '0 2px 12px #f6cccc' : undefined,
+                        transition: 'background 0.2s'
                     }}
                 >
                     Suspend

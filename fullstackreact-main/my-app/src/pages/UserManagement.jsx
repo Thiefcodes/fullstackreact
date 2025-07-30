@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import SuspendUserModal from './SuspendUserModal';
-import ConfirmSuspendModal from './ConfirmSuspendModal';
+import SuspendUserModal from '../components/SuspendUserModal';
+import ConfirmSuspendModal from '../components/ConfirmSuspendModal';
 
 // Placeholder images (update these URLs with real icons when ready)
 const infoIcon = 'https://placehold.co/24x24?text=I';

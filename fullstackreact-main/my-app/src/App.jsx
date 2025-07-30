@@ -14,6 +14,7 @@ import ChangePassword from './pages/ChangePassword';
 // ===> Theethut pages <===
 import UserManagement from './pages/UserManagement';
 import ViewUserProfile from './pages/ViewUserProfile';
+import PublicUserProfile from './pages/PublicUserProfile';
 
 // ===> Jun Hong pages <===
 import MarketplacePage from './pages/MarketplacePage';
@@ -80,6 +81,7 @@ const App = () => {
 
         <Route path="/usermanagement" element={<UserManagement />} />
         <Route path="/users/:userId" element={<ViewUserProfile />} />
+        <Route path="/user/:userId" element={<PublicUserProfile />} />
 
         <Route path="/marketplace" element={<MarketplacePage />} />
         <Route path="/products/new" element={<CreateProductPage />} />

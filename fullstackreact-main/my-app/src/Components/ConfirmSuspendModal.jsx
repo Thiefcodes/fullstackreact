@@ -31,20 +31,34 @@ export default function ConfirmSuspendModal({ show, onConfirm, onCancel, user, d
           </select>
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 18 }}>
-          <button
-            onClick={onConfirm}
-            style={{
-              background: '#fa9a9a', color: '#fff', border: 'none',
-              borderRadius: 7, padding: '11px 36px', fontSize: 17, fontWeight: 500
-            }}
-          >
-            Suspend
-          </button>
+                  <button
+                      onClick={onConfirm}
+                      style={{
+                          background: '#d32f2f',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: 7,
+                          padding: '11px 36px',
+                          fontSize: 17,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 12px #f6cccc',
+                          transition: 'background 0.2s'
+                      }}
+                  >
+                      Suspend
+                  </button>
           <button
             onClick={onCancel}
             style={{
-              background: '#eee', color: '#333', border: 'none',
-              borderRadius: 7, padding: '11px 36px', fontSize: 17, fontWeight: 500
+                background: '#eee',
+                color: '#333',
+                border: 'none',
+                borderRadius: 7,
+                padding: '11px 36px',
+                fontSize: 17,
+                fontWeight: 500,
+                cursor: 'pointer',
             }}
           >
             Cancel
