@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 const CheckoutPage = () => {
     const location = useLocation();
@@ -12,11 +13,13 @@ const CheckoutPage = () => {
     // State for delivery and payment options
     const [deliveryMethod, setDeliveryMethod] = useState('Collection'); // 'Collection' or 'Doorstep'
     const [paymentMethod, setPaymentMethod] = useState('CreditCard'); // 'CreditCard' or 'PayPal'
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const SHIPPING_FEE = 5.00;
 
     // useMemo will recalculate these values only when itemsToCheckout changes.
     // This is more efficient than recalculating on every render.
+    /*
     const subtotal = useMemo(() => {
         return itemsToCheckout.reduce((total, item) => total + parseFloat(item.price), 0);
     }, [itemsToCheckout]);
@@ -28,6 +31,35 @@ const CheckoutPage = () => {
     const totalPrice = useMemo(() => {
         return (subtotal + shippingFee).toFixed(2);
     }, [subtotal, shippingFee]);
+*/
+    const subtotal = useMemo(() => itemsToCheckout.reduce((total, item) => total + parseFloat(item.price), 0), [itemsToCheckout]);
+    const shippingFee = useMemo(() => deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0, [deliveryMethod]);
+    const totalPrice = useMemo(() => (subtotal + shippingFee).toFixed(2), [subtotal, shippingFee]);
+
+    const handlePayNow = async () => {
+        const userId = localStorage.getItem('userId');
+        if (!userId) {
+            alert("Authentication error. Please log in again.");
+            return;
+        }
+        setIsProcessing(true);
+        try {
+            await axios.post('http://localhost:5000/api/orders', {
+                userId,
+                items: itemsToCheckout,
+                totalPrice,
+                deliveryMethod,
+                shippingFee
+            });
+            alert("Payment successful! Your order has been placed.");
+            navigate('/purchases'); // Redirect to the new My Purchases page
+        } catch (err) {
+            console.error("Error placing order:", err);
+            alert("Failed to place order. Please try again.");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
 
     // Redirect back to cart if there are no items to check out.
     if (itemsToCheckout.length === 0) {
@@ -107,8 +139,8 @@ const CheckoutPage = () => {
                     </div>
                 </div>
 
-                <button style={{ width: '100%', padding: '15px', marginTop: '30px', background: 'green', color: 'white', border: 'none', fontSize: '1.2em', cursor: 'pointer' }}>
-                    Pay Now
+                <button onClick={handlePayNow} disabled={isProcessing} style={{ width: '100%', padding: '15px', marginTop: '30px', background: 'green', color: 'white', border: 'none', fontSize: '1.2em', cursor: 'pointer' }}>
+                    {isProcessing ? 'Processing...' : 'Pay Now'}
                 </button>
             </div>
         </div>

@@ -17,6 +17,8 @@ import CreateProductPage from './pages/CreateProductPage'; // for marketplace li
 import CartPage          from './Pages/CartPage';
 import PublicUserProfile from './Pages/PublicUserProfile';
 import CheckoutPage from './Pages/CheckoutPage'; // *** take note for whoever is doing the imports next time, if the imports got error just try renaming the routes cos sometimes its abit buggy
+import MyPurchases from './Pages/MyPurchases'; // 
+import OrderDelivery from './Pages/OrderDelivery'; // 
 
 // === Admin / Staff pages ===
 import UserManagement      from './pages/UserManagement';
@@ -72,6 +74,7 @@ const App = () => {
             {/* Normal User */}
             <Link to="/products/new">List an Item</Link>
             <Link to="/profile">My Profile</Link>
+            <Link to="/purchases">My Purchases</Link>
             <Link to="/cart">Cart</Link>
             <button onClick={handleLogout}>Logout</button>
           </>
@@ -93,6 +96,8 @@ const App = () => {
         <Route path="/products/new"    element={<CreateProductPage />} />
         <Route path="/cart"            element={<CartPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/purchases" element={<MyPurchases />} /> 
+        <Route path="/orders/:orderId" element={<OrderDelivery />} /> 
         <Route path="/users/:userId"   element={<ViewUserProfile />} />
         <Route path="/user/:userId"    element={<PublicUserProfile />} />
 

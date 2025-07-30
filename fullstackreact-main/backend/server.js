@@ -691,6 +691,133 @@ app.delete('/api/cart/:userId/:productId', async (req, res) => {
 
 // ================================================================
 
+// jun hong's codes (orders GET and POST methods)
+// =================================================================
+//  ===> ORDER MANAGEMENT ROUTES <===
+// =================================================================
+
+/**
+ * @route   POST /api/orders
+ * @desc    Create a new order from checkout items
+ * @access  Private
+ */
+app.post('/api/orders', async (req, res) => {
+    const { userId, items, totalPrice, deliveryMethod, shippingFee } = req.body;
+    
+    if (!userId || !items || items.length === 0) {
+        return res.status(400).json({ error: 'Missing required order information.' });
+    }
+
+    const client = await db.connect(); // Use a client for transaction
+
+    try {
+        await client.query('BEGIN'); // Start transaction
+
+        // 1. Create a single entry in the 'orders' table
+        const orderQuery = `
+            INSERT INTO orders (buyer_id, total_price, delivery_method, shipping_fee)
+            VALUES ($1, $2, $3, $4) RETURNING id;
+        `;
+        const orderResult = await client.query(orderQuery, [userId, totalPrice, deliveryMethod, shippingFee]);
+        const newOrderId = orderResult.rows[0].id;
+
+        // 2. Create multiple entries in 'order_items'
+        const productIds = items.map(item => item.id);
+        const cartItemIds = items.map(item => item.cart_item_id);
+
+        for (const item of items) {
+            const orderItemQuery = `
+                INSERT INTO order_items (order_id, product_id, price_at_purchase)
+                VALUES ($1, $2, $3);
+            `;
+            await client.query(orderItemQuery, [newOrderId, item.id, item.price]);
+        }
+
+        // 3. Update the status of the purchased products to 'sold'
+        const updateProductsQuery = `
+            UPDATE marketplaceproducts SET status = 'sold' WHERE id = ANY($1::int[]);
+        `;
+        await client.query(updateProductsQuery, [productIds]);
+
+        // 4. Delete the items from the user's cart
+        const deleteCartItemsQuery = `
+            DELETE FROM cart_items WHERE id = ANY($1::int[]);
+        `;
+        await client.query(deleteCartItemsQuery, [cartItemIds]);
+
+        await client.query('COMMIT'); // Commit transaction
+        res.status(201).json({ message: 'Order created successfully!', orderId: newOrderId });
+
+    } catch (err) {
+        await client.query('ROLLBACK'); // Rollback on error
+        console.error('Error creating order:', err.message);
+        res.status(500).json({ error: 'Server error while creating order.' });
+    } finally {
+        client.release(); // Release the client back to the pool
+    }
+});
+
+
+/**
+ * @route   GET /api/orders/:userId
+ * @desc    Get all orders for a specific user
+ * @access  Private
+ */
+app.get('/api/orders/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const query = `
+            SELECT o.id, o.total_price, o.ordered_at, o.delivered_at,
+                   (SELECT json_agg(p.image_url[1]) FROM order_items oi JOIN marketplaceproducts p ON oi.product_id = p.id WHERE oi.order_id = o.id) as product_images
+            FROM orders o
+            WHERE o.buyer_id = $1
+            ORDER BY o.ordered_at DESC;
+        `;
+        const { rows } = await db.query(query, [userId]);
+        res.status(200).json(rows);
+    } catch (err) {
+        console.error('Error fetching orders:', err.message);
+        res.status(500).json({ error: 'Server error while fetching orders.' });
+    }
+});
+
+
+/**
+ * @route   GET /api/orders/details/:orderId
+ * @desc    Get full details for a single order
+ * @access  Private
+ */
+app.get('/api/orders/details/:orderId', async (req, res) => {
+    const { orderId } = req.params;
+    try {
+        // Get order summary
+        const orderQuery = `SELECT * FROM orders WHERE id = $1;`;
+        const orderResult = await db.query(orderQuery, [orderId]);
+        if (orderResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Order not found.' });
+        }
+        const orderSummary = orderResult.rows[0];
+
+        // Get line items for the order
+        const itemsQuery = `
+            SELECT p.title, p.size, p.image_url, oi.price_at_purchase
+            FROM order_items oi
+            JOIN marketplaceproducts p ON oi.product_id = p.id
+            WHERE oi.order_id = $1;
+        `;
+        const itemsResult = await db.query(itemsQuery, [orderId]);
+        const lineItems = itemsResult.rows;
+
+        res.status(200).json({ summary: orderSummary, items: lineItems });
+
+    } catch (err) {
+        console.error('Error fetching order details:', err.message);
+        res.status(500).json({ error: 'Server error while fetching order details.' });
+    }
+});
+
+// ==================================================
+
 // =================================================================
 //  ===> YOUR PRODUCT CRUD OPERATIONS (for the 'product' table) <===
 // =================================================================
