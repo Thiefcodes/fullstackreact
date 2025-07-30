@@ -11,13 +11,14 @@ import EditProfile     from './pages/EditProfile';
 import ChangePassword  from './pages/ChangePassword';
 
 // === Team pages ===
-import UserManagement    from './pages/UserManagement';
 import ViewUserProfile   from './pages/ViewUserProfile';
 import MarketplacePage   from './pages/MarketplacePage';
 import CreateProductPage from './pages/CreateProductPage'; // for marketplace listing
 import CartPage          from './pages/CartPage';
+import PublicUserProfile from './Pages/PublicUserProfile';
 
 // === Admin / Staff pages ===
+import UserManagement      from './pages/UserManagement';
 import ProductManagement   from './Pages/ProductManagement';
 import InventoryManagement from './Pages/InventoryManagement';
 import CreateProduct       from './Pages/CreateProduct';
@@ -90,10 +91,11 @@ const App = () => {
         <Route path="/marketplace"     element={<MarketplacePage />} />
         <Route path="/products/new"    element={<CreateProductPage />} />
         <Route path="/cart"            element={<CartPage />} />
-        <Route path="/usermanagement"  element={<UserManagement />} />
         <Route path="/users/:userId"   element={<ViewUserProfile />} />
+        <Route path="/user/:userId"    element={<PublicUserProfile />} />
 
         {/* Admin / Staff */}
+        <Route path="/usermanagement"              element={<UserManagement />} />
         <Route path="/products"                    element={<ProductManagement />} />
         <Route path="/inventory"                   element={<InventoryManagement />} />
         <Route path="/products/create"             element={<CreateProduct />} />
