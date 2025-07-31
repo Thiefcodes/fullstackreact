@@ -882,134 +882,211 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
 
 // GET all products with optional search, category filter, and pagination
 app.get('/api/products', async (req, res) => {
-    const { search, category, page = 1, limit = 9 } = req.query; // Default to 9 items per page
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+  const { search, category, page = 1, limit = 9 } = req.query;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    let query = 'SELECT id, created_at, product_name, product_colour, product_material, price, product_description, product_tags, product_points, stock_amt, image_urls, scheduled_stock_amount, scheduled_date FROM product WHERE 1=1';
-    let countQuery = 'SELECT COUNT(id) FROM product WHERE 1=1';
-    const queryParams = []; // Parameters for the main query (with limit/offset)
-    const countParams = []; // Parameters for the count query (only WHERE clause)
-    let paramIndex = 1;
+  // 1) include `status` in the SELECT
+  let query =
+    `SELECT
+       id, created_at, product_name, product_colour, product_material,
+       price, product_description, product_tags, product_points,
+       stock_amt, image_urls, scheduled_stock_amount, scheduled_date,
+       status
+     FROM product
+     WHERE 1=1`;
+  let countQuery = `SELECT COUNT(id) FROM product WHERE 1=1`;
 
-    if (search) {
-        query += ` AND (product_name ILIKE $${paramIndex} OR product_description ILIKE $${paramIndex})`;
-        countQuery += ` AND (product_name ILIKE $${paramIndex} OR product_description ILIKE $${paramIndex})`;
-        queryParams.push(`%${search}%`);
-        countParams.push(`%${search}%`);
-        paramIndex++;
-    }
+  const queryParams = [];
+  const countParams = [];
+  let idx = 1;
 
-    if (category) {
-        query += ` AND product_tags ILIKE $${paramIndex}`;
-        countQuery += ` AND product_tags ILIKE $${paramIndex}`;
-        queryParams.push(`%${category}%`);
-        countParams.push(`%${category}%`);
-        paramIndex++;
-    }
+  if (search) {
+    query += ` AND (product_name ILIKE $${idx} OR product_description ILIKE $${idx})`;
+    countQuery += ` AND (product_name ILIKE $${idx} OR product_description ILIKE $${idx})`;
+    queryParams.push(`%${search}%`);
+    countParams.push(`%${search}%`);
+    idx++;
+  }
+  if (category) {
+    query += ` AND product_tags ILIKE $${idx}`;
+    countQuery += ` AND product_tags ILIKE $${idx}`;
+    queryParams.push(`%${category}%`);
+    countParams.push(`%${category}%`);
+    idx++;
+  }
 
-    query += ` ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-    queryParams.push(parseInt(limit), offset);
+  query += ` ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`;
+  queryParams.push(parseInt(limit), offset);
 
-    try {
-        const productsResult = await db.query(query, queryParams);
-        const countResult = await db.query(countQuery, countParams);
+  try {
+    const productsResult = await db.query(query, queryParams);
+    const countResult    = await db.query(countQuery, countParams);
 
-        const totalProducts = parseInt(countResult.rows[0].count, 10);
-        const totalPages = Math.ceil(totalProducts / parseInt(limit));
+    const totalProducts = parseInt(countResult.rows[0].count, 10);
+    const totalPages    = Math.ceil(totalProducts / parseInt(limit));
 
-        res.json({
-            products: productsResult.rows,
-            totalProducts,
-            totalPages,
-            currentPage: parseInt(page),
-            limit: parseInt(limit)
-        });
-    } catch (err) {
-        console.error('Error fetching products (GET /api/products):', err.message);
-        res.status(500).json({ error: 'Server error', details: err.message });
-    }
+    res.json({
+      products: productsResult.rows,
+      totalProducts,
+      totalPages,
+      currentPage: parseInt(page),
+      limit: parseInt(limit),
+    });
+  } catch (err) {
+    console.error('Error fetching products:', err.message);
+    res.status(500).json({ error: 'Server error', details: err.message });
+  }
 });
 
 // GET a single product by ID
 app.get('/api/products/:id', async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await db.query('SELECT * FROM product WHERE id = $1', [id]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error(`Error fetching product with ID ${id}:`, err.message);
-        res.status(500).json({ error: 'Server error', details: err.message });
+  const { id } = req.params;
+  try {
+    // SELECT * now returns `status` too, since it's a real column
+    const result = await db.query('SELECT * FROM product WHERE id = $1', [id]);
+    if (!result.rows.length) {
+      return res.status(404).json({ error: 'Product not found' });
     }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(`Error fetching product ${id}:`, err.message);
+    res.status(500).json({ error: 'Server error', details: err.message });
+  }
 });
 
 // POST a new product
 app.post('/api/products', async (req, res) => {
-    const { product_name, product_colour, price, product_description, product_material, product_tags, product_points, stock_amt, image_urls } = req.body;
-    try {
-        const tagsString = product_tags || '';
-        const imageUrlsString = image_urls || '';
+  let {
+    product_name,
+    product_colour,
+    price,
+    product_description,
+    product_material,
+    product_tags,
+    product_points,
+    stock_amt,
+    image_urls,
+  } = req.body;
 
-        const scheduled_stock_amount = null;
-        const scheduled_date = null;
+  try {
+    // 2) force minimum stock of 40, and set status='active'
+    const initialStock = Math.max(40, Number(stock_amt) || 40);
+    const tagsString   = product_tags   || '';
+    const pointsNum    = product_points || 0;
+    const urlsString   = image_urls     || '';
 
-        const result = await db.query(
-            `INSERT INTO product (product_name, product_colour, price, product_description, product_material, product_tags, product_points, stock_amt, image_urls, scheduled_stock_amount, scheduled_date, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()) RETURNING *`,
-            [product_name, product_colour, price, product_description, product_material, tagsString, product_points, stock_amt, imageUrlsString, scheduled_stock_amount, scheduled_date]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error('Error adding new product:', err.message);
-        res.status(500).json({ error: 'Server error', details: err.message });
-    }
+    const result = await db.query(
+      `INSERT INTO product (
+         product_name, product_colour, price,
+         product_description, product_material,
+         product_tags, product_points, stock_amt,
+         image_urls, scheduled_stock_amount,
+         scheduled_date, status, created_at
+       ) VALUES (
+         $1, $2, $3,
+         $4, $5,
+         $6, $7, $8,
+         $9, NULL,
+         NULL, 'active', NOW()
+       )
+       RETURNING *`,
+      [
+        product_name, product_colour, price,
+        product_description, product_material,
+        tagsString, pointsNum, initialStock,
+        urlsString,
+      ]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('Error adding new product:', err.message);
+    res.status(500).json({ error: 'Server error', details: err.message });
+  }
 });
 
 // PUT (Update) an existing product
 app.put('/api/products/:id', async (req, res) => {
-    const { id } = req.params;
-    const { product_name, product_colour, price, product_description, product_material, product_tags, product_points, stock_amt, image_urls, scheduled_stock_amount, scheduled_date } = req.body;
-    try {
-        const tagsString = product_tags || '';
-        const imageUrlsString = image_urls || '';
+  const { id } = req.params;
+  let {
+    product_name,
+    product_colour,
+    price,
+    product_description,
+    product_material,
+    product_tags,
+    product_points,
+    stock_amt,
+    image_urls,
+    scheduled_stock_amount,
+    scheduled_date
+  } = req.body;
 
-        const finalScheduledStockAmount = (scheduled_stock_amount === undefined || scheduled_stock_amount === '') ? null : scheduled_stock_amount;
-        const finalScheduledDate = (scheduled_date === undefined || scheduled_date === '') ? null : scheduled_date;
-
-        const result = await db.query(
-            `UPDATE product
-             SET product_name = $1, product_colour = $2, price = $3, product_description = $4,
-                 product_material = $5, product_tags = $6, product_points = $7, stock_amt = $8, image_urls = $9,
-                 scheduled_stock_amount = $10, scheduled_date = $11
-             WHERE id = $12 RETURNING *`,
-            [product_name, product_colour, price, product_description, product_material, tagsString, product_points, stock_amt, imageUrlsString, finalScheduledStockAmount, finalScheduledDate, id]
-        );
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error(`Error updating product with ID ${id}:`, err.message);
-        res.status(500).json({ error: 'Server error', details: err.message });
+  try {
+    // derive the new status in JS
+    let status = 'active';
+    if (scheduled_date && new Date(scheduled_date) > new Date()) {
+      status = 'scheduled';
+    } else if (Number(stock_amt) < 40) {
+      status = 'low';
     }
+
+    const tagsString = product_tags || '';
+    const pointsNum  = product_points || 0;
+    const urlsString = image_urls || '';
+
+    const result = await db.query(
+      `UPDATE product
+         SET product_name           = $1,
+             product_colour         = $2,
+             price                  = $3,
+             product_description    = $4,
+             product_material       = $5,
+             product_tags           = $6,
+             product_points         = $7,
+             stock_amt              = $8,
+             image_urls             = $9,
+             scheduled_stock_amount = $10,
+             scheduled_date         = $11,
+             status                 = $12
+       WHERE id = $13
+       RETURNING *`,
+      [
+        product_name, product_colour, price,
+        product_description, product_material,
+        tagsString, pointsNum, stock_amt,
+        urlsString, scheduled_stock_amount || null,
+        scheduled_date   || null,
+        status,
+        id
+      ]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(`Error updating product ${id}:`, err.message);
+    res.status(500).json({ error: 'Server error', details: err.message });
+  }
 });
 
 // DELETE a product
 app.delete('/api/products/:id', async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await db.query('DELETE FROM product WHERE id = $1 RETURNING *', [id]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-        res.json({ message: 'Product deleted successfully', deletedProduct: result.rows[0] });
-    } catch (err) {
-        console.error(`Error deleting product with ID ${id}:`, err.message);
-        res.status(500).json({ error: 'Server error', details: err.message });
+  const { id } = req.params;
+  try {
+    const result = await db.query('DELETE FROM product WHERE id = $1 RETURNING *', [id]);
+    if (!result.rows.length) {
+      return res.status(404).json({ error: 'Product not found' });
     }
+    res.json({ message: 'Product deleted successfully', deletedProduct: result.rows[0] });
+  } catch (err) {
+    console.error(`Error deleting product ${id}:`, err.message);
+    res.status(500).json({ error: 'Server error', details: err.message });
+  }
 });
+
 
 // =================================================================
 //  ===> YOUR REVIEW CRUD OPERATIONS <===
@@ -1107,50 +1184,44 @@ app.get('/api/products/:product_id/averagerating', async (req, res) => {
 // =================================================================
 
 // Update Product Stock Status (for Inventory Management)
-// This endpoint also handles scheduled_stock_amount and scheduled_date
+// This endpoint also handles scheduled_stock_amount, scheduled_date, and now status
 app.put('/api/products/:id/stock', async (req, res) => {
-    const { id } = req.params;
-    const { stock_amt, scheduled_stock_amount = null, scheduled_date = null } = req.body;
+  const { id } = req.params;
+  const { scheduled_stock_amount, scheduled_date } = req.body;
 
-    const updates = [];
-    const params = [];
-    let paramIndex = 1;
+  // if neither field is present, bail out
+  if (scheduled_stock_amount == null && !scheduled_date) {
+    return res.status(400).json({ error: 'Nothing to update' });
+  }
 
-    if (stock_amt !== undefined && stock_amt >= 0) {
-        updates.push(`stock_amt = ${paramIndex++}`);
-        params.push(stock_amt);
-    } else if (stock_amt < 0) {
-        return res.status(400).json({ error: 'Invalid stock amount provided (cannot be negative).' });
+  // We'll always mark it "scheduled" when you call this route:
+  const query = `
+    UPDATE product
+       SET scheduled_stock_amount = $1,
+           scheduled_date         = $2,
+           status                 = 'scheduled'
+     WHERE id = $3
+     RETURNING *`;
+
+  try {
+    const { rows } = await db.query(query, [
+      scheduled_stock_amount,
+      scheduled_date,
+      id
+    ]);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Product not found' });
     }
 
-    updates.push(`scheduled_stock_amount = ${paramIndex++}`);
-    params.push(scheduled_stock_amount === '' ? null : scheduled_stock_amount);
-
-    updates.push(`scheduled_date = ${paramIndex++}`);
-    params.push(scheduled_date === '' ? null : scheduled_date);
-
-    if (updates.length === 0) {
-        return res.status(400).json({ error: 'No valid fields provided for update.' });
-    }
-
-    params.push(id);
-
-    try {
-        const result = await db.query(
-            `UPDATE product
-             SET ${updates.join(', ')}
-             WHERE id = ${paramIndex} RETURNING *`,
-            params
-        );
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error(`Error updating stock for product ${id}:`, err.message);
-        res.status(500).json({ error: 'Server error', details: err.message });
-    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Error scheduling stock up:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
+
+
 
 app.listen(5000, () => {
   console.log('Server running on port 5000');

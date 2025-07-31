@@ -2,10 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
-
 const API_BASE_URL = 'http://localhost:5000/api/products';
 const IMAGE_UPLOAD_URL = 'http://localhost:5000/api/uploadimage'; // Updated to new unified endpoint
-
 
 const CreateProduct = () => {
     const location = useLocation();
@@ -13,12 +11,11 @@ const CreateProduct = () => {
     const queryParams = new URLSearchParams(location.search);
     const productId = queryParams.get('id'); // Get product ID if in edit mode
 
-
     const [newProduct, setNewProduct] = useState({
         product_name: '',
         product_colour: '',
         price: '',
-        description: '', // Matches product_description in DB
+        product_description: '', // Fixed: Use the correct DB field name
         product_material: '',
         product_tags: '', // Comma-separated string for input
         product_points: '',
@@ -31,10 +28,8 @@ const CreateProduct = () => {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [isEditMode, setIsEditMode] = useState(false);
 
-
     // Determine if the current path matches a sidebar link for active styling
     const isActive = (path) => location.pathname === path;
-
 
     // Fetch product data if in edit mode
     useEffect(() => {
@@ -52,7 +47,7 @@ const CreateProduct = () => {
                         product_name: data.product_name || '',
                         product_colour: data.product_colour || '',
                         price: data.price || '',
-                        description: data.product_description || '', // Note: DB field is product_description
+                        product_description: data.product_description || '', // Fixed: Use correct field name
                         product_material: data.product_material || '',
                         product_tags: data.product_tags || '',
                         product_points: data.product_points || '',
@@ -71,15 +66,12 @@ const CreateProduct = () => {
             setIsEditMode(false);
             // Reset form if not in edit mode (e.g., navigating from edit to create)
             setNewProduct({
-                product_name: '', product_colour: '', price: '', description: '',
+                product_name: '', product_colour: '', price: '', product_description: '',
                 product_material: '', product_tags: '', product_points: '', stock_amt: '', image_urls: '',
             });
             setSelectedFiles([]);
         }
     }, [productId]);
-
-
-
 
     // Helper function to show temporary messages
     const showMessage = (message, isError = false) => {
@@ -96,7 +88,6 @@ const CreateProduct = () => {
         }, 3000); // Message disappears after 3 seconds
     };
 
-
     // Handle input changes for the form fields
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -106,46 +97,51 @@ const CreateProduct = () => {
         }));
     };
 
-
     // Handle file selection for image uploads
     const handleFileChange = (e) => {
         setSelectedFiles(Array.from(e.target.files));
     };
 
-
     // Function to upload files to your Node.js backend
     const uploadImagesViaBackend = async (files, productName) => {
         const uploadedUrls = [];
+        const failedUploads = [];
+        
         for (const file of files) {
             const formData = new FormData();
             formData.append('file', file);
             // Pass product_name for filename generation on backend
             formData.append('product_name', productName || `product-${Date.now()}`);
 
-
             try {
-                const response = await fetch(IMAGE_UPLOAD_URL, { // Use the new endpoint
+                console.log(`Uploading file: ${file.name}`);
+                const response = await fetch(IMAGE_UPLOAD_URL, {
                     method: 'POST',
                     body: formData,
                 });
-
 
                 if (!response.ok) {
                     const errorText = await response.text();
                     throw new Error(`Upload failed: ${errorText}`);
                 }
 
-
                 const result = await response.json();
-                uploadedUrls.push(result.url); // Your backend returns { url: "..." }
+                console.log(`Upload successful for ${file.name}:`, result.url);
+                uploadedUrls.push(result.url);
             } catch (err) {
                 console.error('Error uploading image to backend:', err);
+                failedUploads.push(file.name);
                 showMessage(`Failed to upload image: ${file.name} - ${err.message}`, true);
             }
         }
+        
+        if (failedUploads.length > 0) {
+            console.warn('Failed uploads:', failedUploads);
+        }
+        
+        console.log('All uploaded URLs:', uploadedUrls);
         return uploadedUrls;
     };
-
 
     // Handle form submission for adding/updating a product
     const handleSubmit = async (e) => {
@@ -154,32 +150,42 @@ const CreateProduct = () => {
         setSuccessMessage(null);
         setLoading(true);
 
-
-        let currentImageUrlsArray = newProduct.image_urls
-            ? newProduct.image_urls.split(',').map(url => url.trim()).filter(url => url)
-            : []; // Start with existing image URLs as an array
-
-
-        // If new files are selected, upload them via backend
-        if (selectedFiles.length > 0) {
-            const uploadedUrls = await uploadImagesViaBackend(selectedFiles, newProduct.product_name);
-            // Concatenate new URLs with existing ones
-            currentImageUrlsArray = [...currentImageUrlsArray, ...uploadedUrls];
-            setSelectedFiles([]); // Clear selected files after upload
-        }
-
-
-        // Prepare data to send to backend
-        const dataToSend = {
-            ...newProduct,
-            price: parseFloat(newProduct.price),
-            product_points: parseFloat(newProduct.product_points),
-            stock_amt: parseInt(newProduct.stock_amt, 10),
-            image_urls: currentImageUrlsArray.join(','), // Join back into a comma-separated string
-        };
-
-
         try {
+            let currentImageUrlsArray = newProduct.image_urls
+                ? newProduct.image_urls.split(',').map(url => url.trim()).filter(url => url)
+                : []; // Start with existing image URLs as an array
+
+            console.log('Current images before upload:', currentImageUrlsArray);
+
+            // If new files are selected, upload them via backend
+            if (selectedFiles.length > 0) {
+                console.log('Uploading new files:', selectedFiles.map(f => f.name));
+                const uploadedUrls = await uploadImagesViaBackend(selectedFiles, newProduct.product_name);
+                
+                if (uploadedUrls.length > 0) {
+                    // Concatenate new URLs with existing ones
+                    currentImageUrlsArray = [...currentImageUrlsArray, ...uploadedUrls];
+                    console.log('Combined image URLs:', currentImageUrlsArray);
+                } else {
+                    console.warn('No images were uploaded successfully');
+                }
+            }
+
+            // Prepare data to send to backend - Fixed: Use correct field names
+            const dataToSend = {
+                product_name: newProduct.product_name,
+                product_colour: newProduct.product_colour,
+                price: parseFloat(newProduct.price),
+                product_description: newProduct.product_description, // Fixed: Use correct field name
+                product_material: newProduct.product_material,
+                product_tags: newProduct.product_tags,
+                product_points: parseFloat(newProduct.product_points),
+                stock_amt: parseInt(newProduct.stock_amt, 10),
+                image_urls: currentImageUrlsArray.join(','), // Join back into a comma-separated string
+            };
+
+            console.log('Data being sent to backend:', dataToSend);
+
             let response;
             if (isEditMode) {
                 response = await fetch(`${API_BASE_URL}/${productId}`, {
@@ -195,16 +201,33 @@ const CreateProduct = () => {
                 });
             }
 
-
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
             }
 
+            const responseData = await response.json();
+            console.log('Product saved successfully:', responseData);
+
+            // Update the local state with the new image URLs if successful
+            if (currentImageUrlsArray.length > 0) {
+                setNewProduct(prev => ({
+                    ...prev,
+                    image_urls: currentImageUrlsArray.join(',')
+                }));
+            }
+
+            // Clear selected files after successful upload
+            setSelectedFiles([]);
 
             showMessage(`Product ${isEditMode ? 'updated' : 'added'} successfully!`);
-            navigate('/products'); // Redirect back to product management page
-
+            
+            // Don't navigate immediately in edit mode, let user see the success message
+            if (!isEditMode) {
+                setTimeout(() => {
+                    navigate('/products');
+                }, 1500);
+            }
 
         } catch (err) {
             console.error("Failed to save product:", err);
@@ -213,7 +236,6 @@ const CreateProduct = () => {
             setLoading(false);
         }
     };
-
 
     return (
         <div className="create-product-container">
@@ -248,7 +270,6 @@ const CreateProduct = () => {
                 </nav>
             </aside>
 
-
             {/* Main Content Area */}
             <div className="main-content-area">
                 {/* Page Content */}
@@ -256,7 +277,6 @@ const CreateProduct = () => {
                     <h1 className="page-title">
                         {isEditMode ? 'Edit Product' : 'Create New Product'}
                     </h1>
-
 
                     {error && (
                         <div className="error-message" role="alert">
@@ -270,7 +290,6 @@ const CreateProduct = () => {
                             <span> {successMessage}</span>
                         </div>
                     )}
-
 
                     {loading && isEditMode ? (
                         <p className="loading-text">Loading product data...</p>
@@ -368,12 +387,12 @@ const CreateProduct = () => {
                             </div>
                             {/* Description */}
                             <div className="form-group full-width">
-                                <label htmlFor="description" className="form-label">Description</label>
+                                <label htmlFor="product_description" className="form-label">Description</label>
                                 <textarea
-                                    id="description"
-                                    name="description" // Matches state key
+                                    id="product_description"
+                                    name="product_description" // Fixed: Use correct field name
                                     rows="3"
-                                    value={newProduct.description}
+                                    value={newProduct.product_description}
                                     onChange={handleInputChange}
                                     className="form-textarea"
                                 ></textarea>
@@ -385,6 +404,7 @@ const CreateProduct = () => {
                                     type="file"
                                     id="image_upload"
                                     multiple
+                                    accept="image/*"
                                     onChange={handleFileChange}
                                     className="form-file-input"
                                 />
@@ -412,8 +432,20 @@ const CreateProduct = () => {
                                         <p className="image-upload-note">Note: New uploads will be appended to these URLs.</p>
                                     </div>
                                 )}
+                                {/* Show selected files */}
+                                {selectedFiles.length > 0 && (
+                                    <div className="selected-files-container">
+                                        <p className="selected-files-title">Selected Files:</p>
+                                        <ul className="selected-files-list">
+                                            {selectedFiles.map((file, index) => (
+                                                <li key={index} className="selected-file-item">
+                                                    {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
-
 
                             {/* Form Actions */}
                             <div className="form-actions full-width">
@@ -438,7 +470,6 @@ const CreateProduct = () => {
                 </main>
             </div>
 
-
             {/* Custom CSS for CreateProduct */}
             <style jsx>{`
                 .create-product-container {
@@ -449,7 +480,6 @@ const CreateProduct = () => {
                     -webkit-font-smoothing: antialiased;
                     -moz-osx-font-smoothing: grayscale;
                 }
-
 
                 /* Sidebar Styles (reused) */
                 .sidebar {
@@ -506,7 +536,6 @@ const CreateProduct = () => {
                     margin-right: 12px; /* mr-3 */
                 }
 
-
                 /* Main Content Area Styles (reused) */
                 .main-content-area {
                     flex: 1; /* flex-1 */
@@ -523,7 +552,6 @@ const CreateProduct = () => {
                     color: #1f2937; /* text-gray-800 */
                     margin-bottom: 24px; /* mb-6 */
                 }
-
 
                 /* Message Styles (reused) */
                 .error-message {
@@ -557,7 +585,6 @@ const CreateProduct = () => {
                     margin-top: 40px; /* mt-10 */
                 }
 
-
                 /* Product Form Styles */
                 .product-form {
                     display: grid;
@@ -578,7 +605,6 @@ const CreateProduct = () => {
                         grid-template-columns: repeat(2, 1fr);
                     }
                 }
-
 
                 .form-group {
                     margin-bottom: 0; /* Handled by grid gap */
@@ -636,7 +662,6 @@ const CreateProduct = () => {
                     background-color: #dbeafe; /* hover:file:bg-blue-100 */
                 }
 
-
                 .current-images-container {
                     margin-top: 8px; /* mt-2 */
                     font-size: 0.875rem; /* text-sm */
@@ -666,6 +691,24 @@ const CreateProduct = () => {
                     color: #6b7280; /* text-gray-500 */
                 }
 
+                .selected-files-container {
+                    margin-top: 8px;
+                    font-size: 0.875rem;
+                    color: #4b5563;
+                }
+                .selected-files-title {
+                    margin-bottom: 4px;
+                    font-weight: 500;
+                }
+                .selected-files-list {
+                    list-style: none;
+                    padding: 0;
+                    margin: 0;
+                }
+                .selected-file-item {
+                    padding: 4px 0;
+                    color: #6b7280;
+                }
 
                 .form-actions {
                     grid-column: 1 / -1; /* col-span-full */
@@ -714,6 +757,5 @@ const CreateProduct = () => {
         </div>
     );
 };
-
 
 export default CreateProduct;
