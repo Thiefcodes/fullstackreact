@@ -1,0 +1,132 @@
+/* ViewApproveListingModal.css */
+
+.view-approve-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.15);
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.view-approve-modal-box {
+    background: #fff;
+    border-radius: 18px;
+    padding: 42px 36px 36px 36px;
+    min-width: 330px;
+    max-width: 540px;
+    width: 95vw;
+    max-height: 84vh;
+    box-shadow: 0 8px 36px #bbb8;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+}
+
+.view-approve-modal-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.view-approve-modal-close {
+    position: absolute;
+    right: 18px;
+    top: 16px;
+    font-size: 28px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #333;
+    font-weight: bold;
+}
+
+.view-approve-modal-title {
+    font-size: 1.55rem;
+    font-weight: 700;
+    margin: 0 0 22px 0;
+    text-align: center;
+    word-break: break-word;
+    max-width: 92vw;
+}
+
+.view-approve-modal-row {
+    width: 100%;
+    display: flex;
+    gap: 36px;
+    justify-content: center;
+    align-items: flex-start;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+
+.view-approve-modal-img {
+    width: 160px;
+    height: 160px;
+    border-radius: 12px;
+    object-fit: cover;
+    background: #f7f7f7;
+    box-shadow: 0 2px 12px #e1e1e144;
+    flex-shrink: 0;
+}
+
+.view-approve-modal-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 1.09rem;
+    justify-content: center;
+    min-width: 180px;
+}
+
+.vam-label {
+    font-weight: 600;
+    color: #15342d;
+    display: inline-block;
+    min-width: 80px;
+}
+
+.view-approve-modal-description {
+    width: 100%;
+    max-width: 420px;
+    margin-top: 22px;
+    font-size: 1.12rem;
+    line-height: 1.7;
+    text-align: left;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    background: #f7faf9;
+    border-radius: 8px;
+    padding: 14px 18px 12px 18px;
+}
+
+.vam-description-text {
+    margin-top: 4px;
+    white-space: pre-wrap;
+    color: #212221;
+}
+
+@media (max-width: 650px) {
+    .view-approve-modal-row {
+        flex-direction: column;
+        gap: 20px;
+        align-items: center;
+    }
+
+    .view-approve-modal-img {
+        width: 105px;
+        height: 105px;
+    }
+
+    .view-approve-modal-description {
+        max-width: 98vw;
+        padding: 9px 3vw 9px 3vw;
+    }
+}
