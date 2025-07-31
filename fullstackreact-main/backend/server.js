@@ -626,7 +626,7 @@ app.post('/api/marketplaceproducts', async (req, res) => {
  * @access  Public
  */
 app.get('/api/marketplaceproducts', async (req, res) => {
-    const { excludeUserId, status } = req.query;
+    const { excludeUserId, status, seller_id } = req.query;
 
     try {
         let getProductsQuery;
@@ -648,6 +648,13 @@ app.get('/api/marketplaceproducts', async (req, res) => {
             whereClauses.push(`p.seller_id != $${queryParams.length + 1}`);
             queryParams.push(excludeUserId);
         }
+
+        // Filter by seller if provided
+        if (seller_id) {
+            whereClauses.push(`p.seller_id = $${queryParams.length + 1}`);
+            queryParams.push(seller_id);
+        }
+
 
         getProductsQuery = `
             SELECT p.*, u.username AS seller_name
