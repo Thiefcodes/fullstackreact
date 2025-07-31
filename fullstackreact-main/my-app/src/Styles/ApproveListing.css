@@ -1,0 +1,98 @@
+/* ApproveListing.css */
+
+.approve-listing-container {
+    padding: 44px 0;
+    background: #f7faf9;
+    min-height: 100vh;
+}
+
+.approve-listing-title {
+    font-size: 2.1rem;
+    font-weight: 700;
+    color: #15342D;
+    text-align: center;
+    margin-bottom: 2.2rem;
+}
+
+.approve-listing-table {
+    background: #fff;
+    border-radius: 20px;
+    max-width: 1100px;
+    margin: 0 auto 28px auto;
+    box-shadow: 0 3px 22px #12341a15;
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 98%;
+    overflow: hidden;
+}
+
+    .approve-listing-table th,
+    .approve-listing-table td {
+        padding: 18px 13px;
+        text-align: left;
+        font-size: 1.06rem;
+    }
+
+    .approve-listing-table th {
+        background: #ecf6f2;
+        color: #256c52;
+        font-weight: 600;
+        border-bottom: 2px solid #e6edea;
+    }
+
+    .approve-listing-table tr:not(:last-child) {
+        border-bottom: 1px solid #f1f3f0;
+    }
+
+    .approve-listing-table tbody tr:hover {
+        background: #eaf9f2;
+        transition: background 0.17s;
+    }
+
+.approve-listing-image {
+    width: 64px;
+    height: 64px;
+    border-radius: 11px;
+    object-fit: cover;
+    background: #edf3f0;
+    border: 1.5px solid #e1e1e1;
+    box-shadow: 0 2px 8px #e1e1e166;
+}
+
+.approve-listing-actions {
+    display: flex;
+    gap: 13px;
+    align-items: center;
+}
+
+.approve-listing-icon {
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    transition: transform 0.11s, box-shadow 0.14s;
+    border-radius: 7px;
+    box-shadow: 0 2px 8px #f1f1f1aa;
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+    .approve-listing-icon:hover {
+        transform: scale(1.1);
+        box-shadow: 0 4px 16px #d0ffe0cc;
+        background: #eaf9f2;
+    }
+
+@media (max-width: 800px) {
+    .approve-listing-table th,
+    .approve-listing-table td {
+        padding: 15px 16px; /* Try 15-18px vertically for a modern feel */
+        text-align: left;
+        font-size: 1.06rem;
+    }
+
+    .approve-listing-image {
+        width: 45px;
+        height: 45px;
+    }
+}

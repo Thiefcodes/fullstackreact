@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import Toast from '../components/Toast';
+import ViewApproveListingModal from '../components/ViewApproveListingModal';
+import viewIcon from '../assets/info-icon.png';
+import approveIcon from '../assets/approve-icon.png';
+import rejectIcon from '../assets/reject-icon.png';
+import ConfirmActionModal from '../components/ConfirmActionModal';
+import '../styles/ApproveListing.css';
+
 
 const ApproveListing = () => {
     const [pendingListings, setPendingListings] = useState([]);
@@ -7,6 +14,11 @@ const ApproveListing = () => {
     const [toast, setToast] = useState({ open: false, message: '', type: 'success' });
     const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [selectedListing, setSelectedListing] = useState(null);
+    const [confirmModal, setConfirmModal] = useState({
+        show: false,
+        action: '', // 'approve' or 'reject'
+        listing: null
+    });
 
 
     const showToast = (message, type = 'success') => {
@@ -60,55 +72,39 @@ const ApproveListing = () => {
     };
 
     return (
-        <div style={{ padding: 40 }}>
-            <h1>Approve Listings</h1>
-            <Toast
-                open={toast.open}
-                message={toast.message}
-                type={toast.type}
-                onClose={() => setToast(t => ({ ...t, open: false }))}
-            />
-            {loading ? (
-                <p>Loading...</p>
-            ) : pendingListings.length === 0 ? (
-                <p>No pending listings.</p>
-            ) : (
-                <table style={{
-                    background: '#fff',
-                    borderRadius: 18,
-                    padding: 36,
-                    maxWidth: 1000,
-                    margin: '0 auto',
-                    width: '100%',
-                    boxShadow: '0 2px 12px #eee',
-                    borderCollapse: 'collapse'
-                }}>
-                    <thead>
+        <div className="approve-listing-container">
+            <h1 className="approve-listing-title">Approve Listings</h1>
+            {/* Toast component here if you use it */}
+            <table className="approve-listing-table">
+                <thead>
+                    <tr>
+                        <th>Image</th>
+                        <th>Title</th>
+                        <th>Seller</th>
+                        <th>Price</th>
+                        <th>Description</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {pendingListings.length === 0 ? (
                         <tr>
-                            <th>Image</th>
-                            <th>Title</th>
-                            <th>Seller</th>
-                            <th>Price</th>
-                            <th>Description</th>
-                            <th>Actions</th>
+                            <td colSpan={6} style={{ textAlign: 'center', color: '#888', padding: 40 }}>
+                                No pending listings.
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        {pendingListings.map(listing => (
+                    ) : (
+                        pendingListings.map(listing => (
                             <tr key={listing.id}>
                                 <td>
                                     <img
+                                        className="approve-listing-image"
                                         src={listing.image_url && listing.image_url[0] ? listing.image_url[0] : 'https://placehold.co/80x80?text=No+Image'}
                                         alt="product"
-                                        style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover' }}
                                     />
                                 </td>
                                 <td>{listing.title}</td>
-                                <td>
-                                    <a href={`/users/${listing.seller_id}`} target="_blank" rel="noopener noreferrer">
-                                        {listing.seller_name || listing.seller_id}
-                                    </a>
-                                </td>
+                                <td>{listing.seller_name || listing.seller_id}</td>
                                 <td>${listing.price}</td>
                                 <td style={{
                                     maxWidth: 200,
@@ -117,26 +113,60 @@ const ApproveListing = () => {
                                     whiteSpace: 'nowrap'
                                 }}>{listing.description}</td>
                                 <td>
-                                    <button
-                                        style={{ marginRight: 10 }}
-                                        onClick={() => {
-                                            setSelectedListing(listing);
-                                            setShowDetailsModal(true);
-                                        }}
-                                    >
-                                        View
-                                    </button>
-                                    <button onClick={() => handleApprove(listing.id)}>Approve</button>
-                                    <button onClick={() => {
-                                        console.log("Rejecting listing id:", listing.id);
-                                        handleReject(listing.id);
-                                    }}>Reject</button>
+                                    <div className="approve-listing-actions">
+                                        <img
+                                            src={viewIcon}
+                                            alt="View"
+                                            className="approve-listing-icon"
+                                            title="View Listing"
+                                            onClick={() => {
+                                                setSelectedListing(listing);
+                                                setShowDetailsModal(true);
+                                            }}
+                                        />
+                                        <img
+                                            src={approveIcon}
+                                            alt="Approve"
+                                            className="approve-listing-icon"
+                                            title="Approve Listing"
+                                            onClick={() => setConfirmModal({ show: true, action: 'approve', listing })}
+                                        />
+                                        <img
+                                            src={rejectIcon}
+                                            alt="Reject"
+                                            className="approve-listing-icon"
+                                            title="Reject Listing"
+                                            onClick={() => setConfirmModal({ show: true, action: 'reject', listing })}
+                                        />
+                                    </div>
                                 </td>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-            )}
+                        ))
+                    )}
+                </tbody>
+            </table>
+            <ViewApproveListingModal
+                show={showDetailsModal}
+                listing={selectedListing}
+                onClose={() => {
+                    setShowDetailsModal(false);
+                    setSelectedListing(null);
+                }}
+            />
+            <ConfirmActionModal
+                show={confirmModal.show}
+                actionText={confirmModal.action === 'approve' ? 'approve' : 'reject'}
+                listingTitle={confirmModal.listing?.title || ''}
+                onClose={() => setConfirmModal({ show: false, action: '', listing: null })}
+                onConfirm={() => {
+                    if (confirmModal.action === 'approve') {
+                        handleApprove(confirmModal.listing.id);
+                    } else if (confirmModal.action === 'reject') {
+                        handleReject(confirmModal.listing.id);
+                    }
+                    setConfirmModal({ show: false, action: '', listing: null });
+                }}
+            />
         </div>
     );
 };
