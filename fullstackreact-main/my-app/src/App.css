@@ -137,3 +137,10 @@
 html, body {
     margin: 0 !important;
 }
+
+input,
+textarea,
+select,
+button {
+    box-sizing: border-box !important;
+}

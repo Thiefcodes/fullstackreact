@@ -1,6 +1,8 @@
 // src/App.jsx
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import LoginModal from './components/LoginModal';
+import RegisterModal from './components/RegisterModal';
 import './app.css'
 
 // === Auth / Public pages ===
@@ -37,6 +39,9 @@ const App = () => {
   const userType   = localStorage.getItem('userType');
   const [user, setUser] = useState(null);
   const username = localStorage.getItem('username') || '';
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(false);
+
 
   useEffect(() => {
     async function fetchUser() {
@@ -71,8 +76,15 @@ const App = () => {
                           <Link to="/marketplace">Marketplace</Link>
                       </div>
                       <div className="navbar-auth">
-                          <Link to="/login">Login</Link>
-                          <Link to="/register">Register</Link>
+                          <button
+                              onClick={() => setLoginOpen(true)}
+                              style={{
+                                  background: 'none', color: '#fff', border: 'none',
+                                  fontSize: '1.09rem', fontWeight: 500, cursor: 'pointer', marginRight: '16px'
+                              }}
+                          >
+                              Login
+                          </button>
                       </div>
                   </>
               )}
@@ -115,12 +127,21 @@ const App = () => {
               )}
           </nav>
 
+          <LoginModal
+              open={loginOpen}
+              onClose={() => setLoginOpen(false)}
+              setRegisterOpen={setRegisterOpen}
+              setLoginOpen={setLoginOpen}
+          />
+          <RegisterModal
+              open={registerOpen}
+              onClose={() => setRegisterOpen(false)}
+              setLoginOpen={setLoginOpen} 
+          />
+    
       <Routes>
         {/* Public / Auth */}
         <Route path="/"                element={<MarketplacePage />} />  {/* <-- TEMPORARY PAGE ONLY */}
-        <Route path="/login"           element={<LoginPage />} />
-        <Route path="/register"        element={<RegisterPage />} />
-        <Route path="/register2"       element={<RegisterPage2 />} />
         <Route path="/profile"         element={<UserProfile />} />
         <Route path="/editprofile"     element={<EditProfile />} />
         <Route path="/changepassword"  element={<ChangePassword />} />
@@ -132,9 +153,9 @@ const App = () => {
         <Route path="/checkout"        element={<CheckoutPage />} />
         <Route path="/users/:userId"   element={<ViewUserProfile />} />
         <Route path="/user/:userId"    element={<PublicUserProfile />} />
-        <Route path="/purchases" element={<MyPurchases />} /> 
+        <Route path="/purchases"       element={<MyPurchases />} /> 
         <Route path="/orders/:orderId" element={<OrderDelivery />} /> 
-        <Route path="/listings" element={<MyListings />} />
+        <Route path="/listings"        element={<MyListings />} />
 
         {/* Admin / Staff */}
         <Route path="/usermanagement"              element={<UserManagement />} />
