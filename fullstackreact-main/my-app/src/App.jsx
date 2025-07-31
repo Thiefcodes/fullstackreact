@@ -82,6 +82,7 @@ const App = () => {
                       <div className="navbar-group">
                           <Link to="/marketplace">Marketplace</Link>
                           <Link to="/products/new">List an Item</Link>
+                          <Link to="/listings">My Listings</Link>
                           <Link to="/purchases">My Purchases</Link>
                           <Link to="/profile">My Profile</Link>
                           <Link to="/cart">Cart</Link>
@@ -132,6 +133,7 @@ const App = () => {
         <Route path="/user/:userId"    element={<PublicUserProfile />} />
         <Route path="/purchases" element={<MyPurchases />} /> 
         <Route path="/orders/:orderId" element={<OrderDelivery />} /> 
+        <Route path="/listings" element={<MyListings />} />
 
         {/* Admin / Staff */}
         <Route path="/usermanagement"              element={<UserManagement />} />
