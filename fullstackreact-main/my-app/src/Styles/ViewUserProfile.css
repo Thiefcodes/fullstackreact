@@ -20,9 +20,17 @@
 }
 
 .vup-title {
+    flex: 1;
+    text-align: center;
     font-size: 28px;
-    margin-bottom: 24px;
+    font-weight: 600;
     letter-spacing: 0.2px;
+}
+
+.vup-header-spacer {
+    width: 46px;
+    height: 46px;
+    display: block;
 }
 
 .vup-profile-card {
@@ -196,4 +204,57 @@
     font-size: 16px;
     margin-left: 10px;
     vertical-align: middle;
+}
+
+.vup-back-btn-img {
+    width: 26px;
+    height: 26px;
+    display: block;
+    object-fit: contain;
+}
+
+.vup-back-btn {
+    background: #ecf6f2;
+    border: none;
+    border-radius: 50%;
+    width: 46px;
+    height: 46px;
+    cursor: pointer;
+    box-shadow: 0 2px 12px #b5eee444;
+    margin-bottom: 18px;
+    margin-left: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.16s, box-shadow 0.18s;
+    padding: 0;
+}
+
+    .vup-back-btn:hover,
+    .vup-back-btn:focus {
+        background: #d3f6ea;
+        box-shadow: 0 4px 18px #90e7d144;
+        outline: none;
+    }
+
+.vup-header-row {
+    width: 100%;
+    max-width: 800px;
+    display: flex;
+    align-items: center;
+    margin: 0 auto 24px auto;
+    position: relative;
+}
+.vup-back-btn-fixed {
+    position: fixed;
+    top: 110px; /* Adjust to your design */
+    left: 40px;
+    z-index: 12;
+}
+
+@media (max-width: 700px) {
+    .vup-back-btn-fixed {
+        top: 65px;
+        left: 12px;
+    }
 }

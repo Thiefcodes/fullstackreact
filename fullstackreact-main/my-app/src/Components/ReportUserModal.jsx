@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import closeIcon from '../assets/close-icon.png';
 
 function ReportUserModal({ show, onClose, reportedId, onSuccess, showToast }) {
     const [reason, setReason] = useState('');
@@ -72,10 +73,22 @@ function ReportUserModal({ show, onClose, reportedId, onSuccess, showToast }) {
                     onClick={onClose}
                     type="button"
                     style={{
-                        position: 'absolute', right: 18, top: 18, fontSize: 23, background: 'none',
-                        border: 'none', cursor: 'pointer', color: '#333'
+                        position: 'absolute', right: 18, top: 18, background: 'none',
+                        border: 'none', cursor: 'pointer', padding: 0, // remove default button padding
                     }}
-                >×</button>
+                    aria-label="Close"
+                >
+                    <img
+                        src={closeIcon}
+                        alt="Close"
+                        style={{
+                            width: 28,   // adjust for your UI (try 24-32)
+                            height: 28,
+                            display: 'block',
+                        }}
+                    />
+                </button>
+
                 <h2 style={{ marginBottom: 24, textAlign: 'center' }}>Report User</h2>
 
                 {/* Reason dropdown */}
