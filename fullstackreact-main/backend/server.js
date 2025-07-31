@@ -586,7 +586,7 @@ app.post('/api/marketplaceproducts', async (req, res) => {
 
     const newProductQuery = `
       INSERT INTO marketplaceproducts (seller_id, title, description, price, category, size, image_url, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'available')
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
       RETURNING *;
     `;
     const values = [seller_id, title, description, price, category, size, image_url];
@@ -606,35 +606,36 @@ app.post('/api/marketplaceproducts', async (req, res) => {
  * @access  Public
  */
 app.get('/api/marketplaceproducts', async (req, res) => {
-    // Get the optional userId to exclude from the query parameters.
-    const { excludeUserId } = req.query;
+    const { excludeUserId, status } = req.query;
 
     try {
         let getProductsQuery;
         const queryParams = [];
+        let whereClauses = [];
 
-        // === THIS IS THE CORE LOGIC ===
-        // We dynamically build the SQL query based on whether excludeUserId was provided.
-        if (excludeUserId) {
-            // If we need to exclude a user, add a WHERE clause to filter by seller_id.
-            getProductsQuery = `
-                SELECT p.*, u.username AS seller_name
-                FROM marketplaceproducts p
-                LEFT JOIN users u ON p.seller_id = u.id
-                WHERE p.status = 'available' AND p.seller_id != $1
-                ORDER BY p.created_at DESC;
-            `;
-            queryParams.push(excludeUserId);
+        // Status filtering (for staff view, etc.)
+        if (status) {
+            whereClauses.push(`p.status = $${queryParams.length + 1}`);
+            queryParams.push(status.toLowerCase()); // 'pending' or 'available'
         } else {
-            // If no user to exclude (e.g., a guest is browsing), run the original query.
-            getProductsQuery = `
-                SELECT p.*, u.username AS seller_name
-                FROM marketplaceproducts p
-                LEFT JOIN users u ON p.seller_id = u.id
-                WHERE p.status = 'available'
-                ORDER BY p.created_at DESC;
-            `;
+            // Default to 'available' if status is not provided (for marketplace)
+            whereClauses.push(`p.status = $${queryParams.length + 1}`);
+            queryParams.push('available');
         }
+
+        // Exclude seller if needed
+        if (excludeUserId) {
+            whereClauses.push(`p.seller_id != $${queryParams.length + 1}`);
+            queryParams.push(excludeUserId);
+        }
+
+        getProductsQuery = `
+            SELECT p.*, u.username AS seller_name
+            FROM marketplaceproducts p
+            LEFT JOIN users u ON p.seller_id = u.id
+            WHERE ${whereClauses.join(' AND ')}
+            ORDER BY p.created_at DESC;
+        `;
 
         const result = await db.query(getProductsQuery, queryParams);
         res.status(200).json(result.rows);
@@ -644,6 +645,31 @@ app.get('/api/marketplaceproducts', async (req, res) => {
         res.status(500).json({ error: 'Server error while fetching products.' });
     }
 });
+
+// PATCH /api/marketplaceproducts/:id -- Approve listing
+app.patch('/api/marketplaceproducts/:id', async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+        return res.status(400).json({ error: 'Status is required.' });
+    }
+
+    try {
+        const result = await db.query(
+            'UPDATE marketplaceproducts SET status = $1 WHERE id = $2 RETURNING *',
+            [status.toLowerCase(), id]
+        );
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Product not found.' });
+        }
+        res.status(200).json({ success: true, product: result.rows[0] });
+    } catch (err) {
+        console.error('Error updating product status:', err.message);
+        res.status(500).json({ error: 'Server error while updating product status.' });
+    }
+});
+
 
 // =================================================================
 

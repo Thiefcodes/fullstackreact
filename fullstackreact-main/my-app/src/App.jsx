@@ -25,6 +25,7 @@ import ProductManagement   from './Pages/ProductManagement';
 import InventoryManagement from './Pages/InventoryManagement';
 import CreateProduct       from './Pages/CreateProduct';
 import StockUp             from './Pages/StockUp';
+import ApproveListing      from './pages/ApproveListing';
 
 import Logo from "./assets/EcoThrift-logo.png";
 
@@ -123,7 +124,7 @@ const App = () => {
         <Route path="/marketplace"     element={<MarketplacePage />} />
         <Route path="/products/new"    element={<CreateProductPage />} />
         <Route path="/cart"            element={<CartPage />} />
-        <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/checkout"        element={<CheckoutPage />} />
         <Route path="/users/:userId"   element={<ViewUserProfile />} />
         <Route path="/user/:userId"    element={<PublicUserProfile />} />
 
@@ -133,6 +134,7 @@ const App = () => {
         <Route path="/inventory"                   element={<InventoryManagement />} />
         <Route path="/products/create"             element={<CreateProduct />} />
         <Route path="/products/stockup/:id"        element={<StockUp />} />
+        <Route path="/approvallisting"             element={<ApproveListing />} />
 
         {/* Fallback */}
         <Route path="*" element={<div style={{ padding: '2rem' }}><h2>404 — Not Found</h2></div>} />
