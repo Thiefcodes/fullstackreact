@@ -20,6 +20,7 @@ import PublicUserProfile from './Pages/PublicUserProfile';
 import CheckoutPage from './Pages/CheckoutPage'; // *** take note for whoever is doing the imports next time, if the imports got error just try renaming the routes cos sometimes its abit buggy
 import MyPurchases from './pages/MyPurchases'; 
 import OrderDelivery from './pages/OrderDelivery'; 
+import MyListings from './Pages/MyListings';
 
 // === Admin / Staff pages ===
 import UserManagement      from './pages/UserManagement';
