@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import Toast from '../components/Toast';
+import ViewApproveListingModal from '../components/ViewApproveListingModal';
+import viewIcon from '../assets/info-icon.png';
+import approveIcon from '../assets/approve-icon.png';
+import rejectIcon from '../assets/reject-icon.png';
+import ConfirmActionModal from '../components/ConfirmActionModal';
+
 
 const ApproveListing = () => {
     const [pendingListings, setPendingListings] = useState([]);
@@ -7,6 +13,11 @@ const ApproveListing = () => {
     const [toast, setToast] = useState({ open: false, message: '', type: 'success' });
     const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [selectedListing, setSelectedListing] = useState(null);
+    const [confirmModal, setConfirmModal] = useState({
+        show: false,
+        action: '', // 'approve' or 'reject'
+        listing: null
+    });
 
 
     const showToast = (message, type = 'success') => {
@@ -117,26 +128,67 @@ const ApproveListing = () => {
                                     whiteSpace: 'nowrap'
                                 }}>{listing.description}</td>
                                 <td>
-                                    <button
-                                        style={{ marginRight: 10 }}
+                                    {/* View */}
+                                    <img
+                                        src={viewIcon}
+                                        alt="View"
+                                        style={{
+                                            width: 32, height: 32, cursor: 'pointer', marginRight: 8, verticalAlign: 'middle'
+                                        }}
+                                        title="View Listing"
                                         onClick={() => {
                                             setSelectedListing(listing);
                                             setShowDetailsModal(true);
                                         }}
-                                    >
-                                        View
-                                    </button>
-                                    <button onClick={() => handleApprove(listing.id)}>Approve</button>
-                                    <button onClick={() => {
-                                        console.log("Rejecting listing id:", listing.id);
-                                        handleReject(listing.id);
-                                    }}>Reject</button>
+                                    />
+                                    {/* Approve */}
+                                    <img
+                                        src={approveIcon}
+                                        alt="Approve"
+                                        title="Approve Listing"
+                                        style={{
+                                            width: 32, height: 32, cursor: 'pointer', marginRight: 8, verticalAlign: 'middle'
+                                        }}
+                                        onClick={() => setConfirmModal({ show: true, action: 'approve', listing })}
+                                    />
+                                    {/* Reject */}
+                                    <img
+                                        src={rejectIcon}
+                                        alt="Reject"
+                                        title="Reject Listing"
+                                        style={{
+                                            width: 32, height: 32, cursor: 'pointer', marginRight: 8, verticalAlign: 'middle'
+                                        }}
+                                        onClick={() => setConfirmModal({ show: true, action: 'reject', listing })}
+                                    />
                                 </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             )}
+            <ViewApproveListingModal
+                show={showDetailsModal}
+                listing={selectedListing}
+                onClose={() => {
+                    setShowDetailsModal(false);
+                    setSelectedListing(null);
+                }}
+            />
+            <ConfirmActionModal
+                show={confirmModal.show}
+                actionText={confirmModal.action === 'approve' ? 'approve' : 'reject'}
+                listingTitle={confirmModal.listing?.title || ''}
+                onClose={() => setConfirmModal({ show: false, action: '', listing: null })}
+                onConfirm={() => {
+                    if (confirmModal.action === 'approve') {
+                        handleApprove(confirmModal.listing.id);
+                    } else if (confirmModal.action === 'reject') {
+                        handleReject(confirmModal.listing.id);
+                    }
+                    setConfirmModal({ show: false, action: '', listing: null });
+                }}
+            />
         </div>
     );
 };
