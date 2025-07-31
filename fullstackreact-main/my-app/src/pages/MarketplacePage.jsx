@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 
 // This is a simple component for displaying a single product card.
 // We can keep it in the same file for simplicity or move it to its own file later.
@@ -40,7 +41,21 @@ const ProductCard = ({ product }) => {
                 <h3 style={{ fontSize: '1.2em', margin: '12px 0 4px 0' }}>{product.title}</h3>
                 <p style={{ fontSize: '1.1em', fontWeight: 'bold', margin: '0' }}>${product.price}</p>
                 <p style={{ color: '#555', margin: '4px 0' }}>Size: {product.size || 'N/A'}</p>
-                <p style={{ color: '#777', fontSize: '0.9em', margin: '4px 0 0 0' }}>Sold by: {product.seller_name}</p>
+                <p style={{ color: '#777', fontSize: '0.9em', margin: '4px 0 0 0' }}>
+                    Sold by:{" "}
+                    <Link
+                        to={`/user/${product.seller_id}`}
+                        style={{
+                            color: "#21706a",
+                            fontWeight: 600,
+                            textDecoration: "underline",
+                            cursor: "pointer"
+                        }}
+                    >
+                        {product.seller_name}
+                    </Link>
+                </p>
+
             </div>
             <button onClick={handleAddToCart} style={{ padding: '8px', cursor: 'pointer', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>
                 Add to Cart

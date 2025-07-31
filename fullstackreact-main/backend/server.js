@@ -220,22 +220,58 @@ app.get('/api/users', async (req, res) => {
 
 
 app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
-  try {
-    const result = await db.query(
-      'SELECT * FROM users WHERE username = $1 AND password = $2',
-      [username, password]
-    );
-    if (result.rows.length === 0) {
-      return res.status(401).send('Invalid username or password');
+    const { username, password } = req.body;
+    try {
+        const result = await db.query(
+            'SELECT * FROM users WHERE username = $1 AND password = $2',
+            [username, password]
+        );
+        if (result.rows.length === 0) {
+            return res.status(401).send('Invalid username or password');
+        }
+        const user = result.rows[0];
+
+        // === CHECK SUSPENSION STATUS ===
+        const statusResult = await db.query(
+            'SELECT status, suspend_until FROM user_active_status WHERE user_id = $1',
+            [user.id]
+        );
+        const statusRow = statusResult.rows[0];
+        if (statusRow && statusRow.status === 'suspended') {
+            const suspendUntil = statusRow.suspend_until;
+            if (!suspendUntil || new Date(suspendUntil) > new Date()) {
+                // User is currently suspended
+                let untilStr = '';
+                let durationStr = '';
+                if (suspendUntil) {
+                    const now = new Date();
+                    const until = new Date(suspendUntil);
+                    const ms = until - now;
+                    if (ms > 0) {
+                        const totalMinutes = Math.ceil(ms / (1000 * 60));
+                        const hours = Math.floor(totalMinutes / 60);
+                        const minutes = totalMinutes % 60;
+                        if (hours >= 24) {
+                            const days = Math.floor(hours / 24);
+                            durationStr = `${days} day${days !== 1 ? 's' : ''}`;
+                        } else if (hours > 0) {
+                            durationStr = `${hours} hour${hours !== 1 ? 's' : ''}`;
+                        } else {
+                            durationStr = `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+                        }
+                        untilStr = ` for ${durationStr} (until ${until.toLocaleString()})`;
+                    }
+                }
+                return res.status(403).send(`Your account is suspended${untilStr}.`);
+            }
+        }
+
+        // Return only necessary info!
+        res.json({ id: user.id, username: user.username, type: user.type });
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).send('Server error');
     }
-    // Return only necessary info!
-    const user = result.rows[0];
-    res.json({ id: user.id, username: user.username, type: user.type });
-  } catch (err) {
-    console.error('Login error:', err);
-    res.status(500).send('Server error');
-  }
 });
 
 app.put('/api/updateprofile', async (req, res) => {
