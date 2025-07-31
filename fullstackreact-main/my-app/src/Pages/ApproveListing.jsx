@@ -6,6 +6,7 @@ import approveIcon from '../assets/approve-icon.png';
 import rejectIcon from '../assets/reject-icon.png';
 import ConfirmActionModal from '../components/ConfirmActionModal';
 import '../styles/ApproveListing.css';
+import { Link } from 'react-router-dom';
 
 
 const ApproveListing = () => {
@@ -104,7 +105,24 @@ const ApproveListing = () => {
                                     />
                                 </td>
                                 <td>{listing.title}</td>
-                                <td>{listing.seller_name || listing.seller_id}</td>
+                                <td>
+                                    {listing.seller_id ? (
+                                        <Link
+                                            to={`/users/${listing.seller_id}`}
+                                            style={{
+                                                color: '#21706a',
+                                                fontWeight: 600,
+                                                textDecoration: 'underline',
+                                                cursor: 'pointer',
+                                                transition: 'color 0.16s'
+                                            }}
+                                        >
+                                            {listing.seller_name || listing.seller_id}
+                                        </Link>
+                                    ) : (
+                                        listing.seller_name || listing.seller_id
+                                    )}
+                                </td>
                                 <td>${listing.price}</td>
                                 <td style={{
                                     maxWidth: 200,
