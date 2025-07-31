@@ -922,6 +922,30 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
 
 // ==================================================
 
+// jun hong's codes (listing GET method)
+/**
+ * @route   GET /api/listings/:userId
+ * @desc    Get all marketplace products listed by a specific user
+ * @access  Private (as only a logged-in user should see their own listings)
+ */
+app.get('/api/listings/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const query = `
+            SELECT * FROM marketplaceproducts
+            WHERE seller_id = $1
+            ORDER BY created_at DESC;
+        `;
+        // We use parseInt here as a good practice to ensure the ID is a number.
+        const { rows } = await db.query(query, [parseInt(userId, 10)]);
+        res.status(200).json(rows);
+    } catch (err) {
+        console.error('Error fetching user listings:', err.message);
+        res.status(500).json({ error: 'Server error while fetching listings.' });
+    }
+});
+// ===============================================
+
 // =================================================================
 //  ===> YOUR PRODUCT CRUD OPERATIONS (for the 'product' table) <===
 // =================================================================

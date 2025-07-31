@@ -20,6 +20,7 @@ import PublicUserProfile from './Pages/PublicUserProfile';
 import CheckoutPage from './Pages/CheckoutPage'; // *** take note for whoever is doing the imports next time, if the imports got error just try renaming the routes cos sometimes its abit buggy
 import MyPurchases from './pages/MyPurchases'; 
 import OrderDelivery from './pages/OrderDelivery'; 
+import MyListings from './Pages/MyListings';
 
 // === Admin / Staff pages ===
 import UserManagement      from './pages/UserManagement';
@@ -82,6 +83,7 @@ const App = () => {
                       <div className="navbar-group">
                           <Link to="/marketplace">Marketplace</Link>
                           <Link to="/products/new">List an Item</Link>
+                          <Link to="/listings">My Listings</Link>
                           <Link to="/purchases">My Purchases</Link>
                           <Link to="/profile">My Profile</Link>
                           <Link to="/cart">Cart</Link>
@@ -132,6 +134,7 @@ const App = () => {
         <Route path="/user/:userId"    element={<PublicUserProfile />} />
         <Route path="/purchases" element={<MyPurchases />} /> 
         <Route path="/orders/:orderId" element={<OrderDelivery />} /> 
+        <Route path="/listings" element={<MyListings />} />
 
         {/* Admin / Staff */}
         <Route path="/usermanagement"              element={<UserManagement />} />
