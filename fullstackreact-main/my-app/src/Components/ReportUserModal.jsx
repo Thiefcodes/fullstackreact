@@ -65,9 +65,17 @@ function ReportUserModal({ show, onClose, reportedId, onSuccess, showToast }) {
             background: 'rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
         }}>
             <form style={{
-                background: '#fff', borderRadius: 18, padding: 38, minWidth: 340, boxShadow: '0 4px 28px #d5dbe4',
-                position: 'relative', maxWidth: 380
+                background: '#fff',
+                borderRadius: 18,
+                padding: 38,
+                minWidth: 340,
+                boxShadow: '0 4px 28px #d5dbe4',
+                position: 'relative',
+                maxWidth: 380,
+                width: '100%',
+                boxSizing: 'border-box'
             }} onSubmit={handleSubmit}>
+
                 {/* Close button */}
                 <button
                     onClick={onClose}
@@ -92,32 +100,50 @@ function ReportUserModal({ show, onClose, reportedId, onSuccess, showToast }) {
                 <h2 style={{ marginBottom: 24, textAlign: 'center' }}>Report User</h2>
 
                 {/* Reason dropdown */}
-                <label style={{ fontWeight: 500 }}>Reason <span style={{ color: '#d32f2f' }}>*</span></label>
-                <select
-                    value={reason}
-                    onChange={e => setReason(e.target.value)}
-                    style={{ width: '100%', padding: 10, borderRadius: 7, border: '1.5px solid #ccc', marginBottom: 18, fontSize: 16 }}
-                    required
-                >
-                    <option value="">Select a reason...</option>
-                    {reasons.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+                <div style={{ marginBottom: 22 }}>
+                    <label style={{ fontWeight: 500, display: 'block', marginBottom: 7 }}>
+                        Reason <span style={{ color: '#d32f2f' }}>*</span>
+                    </label>
+                    <select
+                        value={reason}
+                        onChange={e => setReason(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: 10,
+                            borderRadius: 7,
+                            border: '1.5px solid #ccc',
+                            fontSize: 16
+                        }}
+                        required
+                    >
+                        <option value="">Select a reason...</option>
+                        {reasons.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                </div>
 
                 {/* Additional info */}
-                <label style={{ fontWeight: 500 }}>
-                    Additional Info <span style={{ color: '#d32f2f' }}>*</span>
-                </label>
-                <textarea
-                    value={additionalInfo}
-                    onChange={e => setAdditionalInfo(e.target.value)}
-                    placeholder="Describe the issue..."
-                    rows={4}
-                    style={{
-                        width: '100%', margin: '8px 0 20px 0', padding: 11,
-                        borderRadius: 7, border: '1.5px solid #ccc', fontSize: 15, resize: 'none'
-                    }}
-                    required
-                />
+                <div style={{ marginBottom: 22 }}>
+                    <label style={{ fontWeight: 500, display: 'block', marginBottom: 7 }}>
+                        Additional Info <span style={{ color: '#d32f2f' }}>*</span>
+                    </label>
+                    <textarea
+                        value={additionalInfo}
+                        onChange={e => setAdditionalInfo(e.target.value)}
+                        placeholder="Describe the issue..."
+                        rows={4}
+                        style={{
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            padding: 11,
+                            borderRadius: 7,
+                            border: '1.5px solid #ccc',
+                            fontSize: 15,
+                            resize: 'none'
+                        }}
+                        required
+                    />
+                </div>
+
 
                 {/* Submit button */}
                 <button

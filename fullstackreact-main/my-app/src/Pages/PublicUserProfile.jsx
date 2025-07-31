@@ -133,22 +133,22 @@ const PublicUserProfile = () => {
                                         {listing.description && listing.description.length > 50 && "..."}
                                     </div>
                                     {String(listing.seller_id) !== String(loggedInUserId) && (
-                                        <button
-                                            className="public-profile-listing-addcart"
-                                            onClick={() => handleAddToCart(listing)}
-                                        >
-                                            Add to Cart
-                                        </button>
-                                    )}
-                                    {String(listing.seller_id) === String(loggedInUserId) && (
-                                        <button
-                                            className="public-profile-listing-addcart"
-                                            style={{ background: "#ddd", color: "#888", cursor: "not-allowed" }}
-                                            disabled
-                                        >
-                                            Your Listing
-                                        </button>
-                                    )}
+            <button
+                className="public-profile-listing-addcart"
+                onClick={() => handleAddToCart(listing)}
+            >
+                Add to Cart
+            </button>
+        )}
+        {String(listing.seller_id) === String(loggedInUserId) && (
+            <button
+                className="public-profile-listing-addcart"
+                style={{ background: "#ddd", color: "#888", cursor: "not-allowed" }}
+                disabled
+            >
+                Your Listing
+            </button>
+        )}
                                 </div>
                             ))}
                         </div>
