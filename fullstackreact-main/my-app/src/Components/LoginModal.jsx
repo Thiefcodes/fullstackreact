@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import closeIcon from '../assets/close-icon.png'; 
 
-const LoginModal = ({ open, onClose, setRegisterOpen, setLoginOpen }) => {
+const LoginModal = ({ open, onClose, setRegisterOpen, setLoginOpen, onSuccess }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [errors, setErrors] = useState({});
@@ -20,12 +20,6 @@ const LoginModal = ({ open, onClose, setRegisterOpen, setLoginOpen }) => {
 
     const handleLogin = async (e) => {
         e.preventDefault();
-        let tempErrors = {};
-        if (!username.trim()) tempErrors.username = 'Username is required';
-        if (!password) tempErrors.password = 'Password is required';
-        setErrors(tempErrors);
-        if (Object.keys(tempErrors).length > 0) return;
-
         setErrors({});
         setLoading(true);
         try {
@@ -34,21 +28,24 @@ const LoginModal = ({ open, onClose, setRegisterOpen, setLoginOpen }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password }),
             });
+
             if (!res.ok) {
+                // Only read the text ONCE here!
                 const msg = await res.text();
                 setErrors({ server: msg || 'Login failed' });
                 setLoading(false);
                 return;
             }
+
+            // Only here, parse JSON (will not throw)
             const data = await res.json();
             localStorage.setItem('username', data.username);
             localStorage.setItem('userId', data.id);
             localStorage.setItem('userType', data.type);
 
-            // Optionally call parent handler
             onSuccess?.(data);
 
-            window.location.reload(); // So navbar updates
+            window.location.reload();
         } catch (err) {
             setErrors({ server: 'Error logging in. Please try again.' });
             setLoading(false);

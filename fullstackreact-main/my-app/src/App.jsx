@@ -1,9 +1,11 @@
 // src/App.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import LoginModal from './components/LoginModal';
 import RegisterModal from './components/RegisterModal';
 import './app.css'
+import CartImg from './assets/cart-icon.png'; 
+
 
 // === Auth / Public pages ===
 import LoginPage       from './pages/LoginPage';
@@ -41,6 +43,9 @@ const App = () => {
   const username = localStorage.getItem('username') || '';
   const [loginOpen, setLoginOpen] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState(null);
+  const sellingBtnRef = useRef(null);
+  const buyingBtnRef = useRef(null);
 
 
   useEffect(() => {
@@ -56,7 +61,7 @@ const App = () => {
     localStorage.removeItem('userId');
     localStorage.removeItem('username');
     localStorage.removeItem('userType');
-    window.location.href = '/login';
+    window.location.href = '/marketplace';
   };
 
   return (
@@ -76,15 +81,15 @@ const App = () => {
                           <Link to="/marketplace">Marketplace</Link>
                       </div>
                       <div className="navbar-auth">
-                          <button
+                          <span
+                              className="navbar-login-link"
                               onClick={() => setLoginOpen(true)}
-                              style={{
-                                  background: 'none', color: '#fff', border: 'none',
-                                  fontSize: '1.09rem', fontWeight: 500, cursor: 'pointer', marginRight: '16px'
-                              }}
+                              tabIndex={0}
+                              role="button"
+                              style={{ cursor: 'pointer' }}
                           >
                               Login
-                          </button>
+                          </span>
                       </div>
                   </>
               )}
@@ -92,21 +97,99 @@ const App = () => {
               {/* User: all grouped left, logout right */}
               {isLoggedIn && userType !== 'Staff' && user && (
                   <>
-                      <div className="navbar-group">
-                          <Link to="/marketplace">Marketplace</Link>
-                          <Link to="/products/new">List an Item</Link>
-                          <Link to="/listings">My Listings</Link>
-                          <Link to="/purchases">My Purchases</Link>
-                          <Link to="/profile">My Profile</Link>
-                          <Link to="/cart">Cart</Link>
+                      <Link
+                          to="/marketplace"
+                          className="navbar-link"
+                          onClick={e => {
+                              e.currentTarget.blur();
+                              setOpenDropdown(null); // Just in case
+                          }}
+                      >
+                          Marketplace
+                      </Link>
+
+
+                      {/* Selling Dropdown */}
+                      <div
+                          className="dropdown"
+                          onMouseEnter={() => setOpenDropdown('selling')}
+                          onMouseLeave={() => {
+                              setOpenDropdown(null);
+                              sellingBtnRef.current && sellingBtnRef.current.blur(); // Remove focus
+                          }}
+                      >
+                          <a
+                              href="#"
+                              className="dropbtn"
+                              ref={sellingBtnRef}
+                              onClick={e => e.preventDefault()} // Prevent # navigation
+                              tabIndex={0}
+                          >Selling</a>
+                          {openDropdown === 'selling' && (
+                              <div className="dropdown-content">
+                                  <Link to="/products/new" onClick={() => setOpenDropdown(null)}>List an Item</Link>
+                                  <Link to="/listings" onClick={() => setOpenDropdown(null)}>My Listings</Link>
+                              </div>
+                          )}
+                      </div>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+
+
+                      {/* Buying Dropdown */}
+                      <div
+                          className="dropdown"
+                          onMouseEnter={() => setOpenDropdown('buying')}
+                          onMouseLeave={() => {
+                              setOpenDropdown(null);
+                              buyingBtnRef.current && buyingBtnRef.current.blur();
+                          }}
+                      >
+                          <a
+                              href="#"
+                              className="dropbtn"
+                              ref={buyingBtnRef}
+                              onClick={e => e.preventDefault()}
+                              tabIndex={0}
+                          >Buying</a>
+                          {openDropdown === 'buying' && (
+                              <div className="dropdown-content">
+                                  <Link to="/purchases" onClick={() => setOpenDropdown(null)}>My Purchases</Link>
+                                  {/* More links here if needed */}
+                              </div>
+                          )}
                       </div>
+
+
                       <div className="navbar-usergroup">
-                          <img
-                              src={user.profilepic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.firstname || user.username)}
-                              alt="Profile"
-                              className="navbar-profile-pic"
-                          />
-                          <button className="logout-btn" onClick={handleLogout}>Logout</button>
+                          {/* Cart Icon */}
+                          <Link
+                              to="/cart"
+                              className="navbar-cart-link"
+                              style={{ display: 'flex', alignItems: 'center' }}
+                              onClick={e => e.currentTarget.blur()}
+                          >
+                              <img
+                                  src={CartImg}
+                                  alt="Cart"
+                                  className="navbar-cart-icon"
+                              />
+                          </Link>
+
+                          {/* Profile Pic */}
+                          <Link
+                              to="/profile"
+                              className="navbar-profile-link"
+                              onClick={e => e.currentTarget.blur()}
+                          >
+                              <img
+                                  src={user.profilepic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.firstname || user.username)}
+                                  alt="Profile"
+                                  className="navbar-profile-pic"
+                                  style={{ cursor: 'pointer' }}
+                              />
+                          </Link>
+                          <button className="logout-btn" onClick={handleLogout} style={{ marginLeft: 10 }}>
+                              Logout
+                          </button>
                       </div>
                   </>
               )}
@@ -115,10 +198,10 @@ const App = () => {
               {isLoggedIn && userType === 'Staff' && (
                   <>
                       <div className="navbar-group">
-                          <Link to="/products">Manage Products</Link>
-                          <Link to="/inventory">Manage Inventory</Link>
-                          <Link to="/usermanagement">Manage Users</Link>
-                          <Link to="/approvallisting">Approve Listings</Link>
+                          <Link to="/products" className="navbar-link" onClick={e => e.currentTarget.blur()}>Manage Products</Link>
+                          <Link to="/inventory" className="navbar-link" onClick={e => e.currentTarget.blur()}>Manage Inventory</Link>
+                          <Link to="/usermanagement" className="navbar-link" onClick={e => e.currentTarget.blur()}>Manage Users</Link>
+                          <Link to="/approvallisting" className="navbar-link" onClick={e => e.currentTarget.blur()}>Approve Listings</Link>
                       </div>
                       <div className="navbar-auth">
                           <button className="logout-btn" onClick={handleLogout}>Logout</button>
