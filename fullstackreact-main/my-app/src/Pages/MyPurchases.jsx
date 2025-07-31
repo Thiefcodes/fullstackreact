@@ -41,7 +41,7 @@ const MyPurchases = () => {
                                 ))}
                             </div>
                             <div style={{ flexGrow: 1 }}>
-                                <h3 style={{ margin: 0 }}>Order #{order.id}</h3>
+                                <h3 style={{ margin: 0 }}>Order #{order.user_order_id}</h3>
                                 <p style={{ margin: '5px 0', color: '#555' }}>Ordered on: {new Date(order.ordered_at).toLocaleDateString()}</p>
                                 <p style={{ margin: '5px 0', fontWeight: 'bold' }}>Total: ${order.total_price}</p>
                             </div>

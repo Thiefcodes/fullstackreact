@@ -811,8 +811,9 @@ app.post('/api/orders', async (req, res) => {
 
         // 1. Create a single entry in the 'orders' table
         const orderQuery = `
-            INSERT INTO orders (buyer_id, total_price, delivery_method, shipping_fee)
-            VALUES ($1, $2, $3, $4) RETURNING id;
+            INSERT INTO orders (buyer_id, total_price, delivery_method, shipping_fee, user_order_id)
+            VALUES ($1, $2, $3, $4, (SELECT COUNT(*) FROM orders WHERE buyer_id = $1) + 1)
+            RETURNING id;
         `;
         const orderResult = await client.query(orderQuery, [userId, totalPrice, deliveryMethod, shippingFee]);
         const newOrderId = orderResult.rows[0].id;
@@ -863,7 +864,7 @@ app.get('/api/orders/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
         const query = `
-            SELECT o.id, o.total_price, o.ordered_at, o.delivered_at,
+            SELECT o.id, o.user_order_id, o.total_price, o.ordered_at, o.delivered_at,
                    (SELECT json_agg(p.image_url[1]) FROM order_items oi JOIN marketplaceproducts p ON oi.product_id = p.id WHERE oi.order_id = o.id) as product_images
             FROM orders o
             WHERE o.buyer_id = $1
@@ -887,7 +888,7 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
     const { orderId } = req.params;
     try {
         // Get order summary
-        const orderQuery = `SELECT * FROM orders WHERE id = $1;`;
+        const orderQuery = `SELECT *, user_order_id FROM orders WHERE id = $1;`;
         const orderResult = await db.query(orderQuery, [orderId]);
         if (orderResult.rows.length === 0) {
             return res.status(404).json({ error: 'Order not found.' });
