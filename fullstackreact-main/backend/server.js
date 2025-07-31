@@ -1,7 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { Client } = require('pg');
+const { Client } = require('pg'); // [OLD CODE]
+const { Pool } = require('pg');
 const multer = require('multer');
 const path = require('path');
 const app = express();
@@ -108,17 +109,36 @@ app.post('/api/uploadimage', unifiedUpload.single('file'), (req, res) => {
     res.json({ url: fileUrl });
 });
 
-
+// [OLD CODE] db connection for Client
+/*
 const db = new Client({
   connectionString: "postgresql://postgres.nlquunjntkcatxdzgwtc:22062004Ee!1@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?pool_mode=session",
   ssl: { rejectUnauthorized: false }
 });
+*/
 
+// [NEW CODE]
+const db = new Pool({
+  connectionString: "postgresql://postgres.nlquunjntkcatxdzgwtc:22062004Ee!1@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?pool_mode=session",
+  ssl: { rejectUnauthorized: false }
+});
 
-
+// [OLD CODE] db.connect() call
+/*
 db.connect()
   .then(() => console.log('Connected to PostgreSQL via Supabase'))
   .catch((err) => console.error('Connection error:', err));
+*/
+
+// [NEW CODE]
+db.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('Database connection error:', err.stack);
+  } else {
+    console.log('Connected to PostgreSQL via Supabase Pool. Server time:', res.rows[0].now);
+  }
+});
+
 
 app.post('/api/register', async (req, res) => {
   const {
