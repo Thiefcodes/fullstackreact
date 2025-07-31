@@ -5,6 +5,9 @@ const ApproveListing = () => {
     const [pendingListings, setPendingListings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState({ open: false, message: '', type: 'success' });
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [selectedListing, setSelectedListing] = useState(null);
+
 
     const showToast = (message, type = 'success') => {
         setToast({ open: true, message, type });
@@ -101,7 +104,11 @@ const ApproveListing = () => {
                                     />
                                 </td>
                                 <td>{listing.title}</td>
-                                <td>{listing.seller_id}</td>
+                                <td>
+                                    <a href={`/users/${listing.seller_id}`} target="_blank" rel="noopener noreferrer">
+                                        {listing.seller_name || listing.seller_id}
+                                    </a>
+                                </td>
                                 <td>${listing.price}</td>
                                 <td style={{
                                     maxWidth: 200,
@@ -111,28 +118,19 @@ const ApproveListing = () => {
                                 }}>{listing.description}</td>
                                 <td>
                                     <button
-                                        onClick={() => handleApprove(listing.id)}
-                                        style={{
-                                            background: '#38a169',
-                                            color: '#fff',
-                                            border: 'none',
-                                            borderRadius: 7,
-                                            padding: '7px 17px',
-                                            marginRight: 10,
-                                            cursor: 'pointer'
+                                        style={{ marginRight: 10 }}
+                                        onClick={() => {
+                                            setSelectedListing(listing);
+                                            setShowDetailsModal(true);
                                         }}
-                                    >Approve</button>
-                                    <button
-                                        onClick={() => handleReject(listing.id)}
-                                        style={{
-                                            background: '#d32f2f',
-                                            color: '#fff',
-                                            border: 'none',
-                                            borderRadius: 7,
-                                            padding: '7px 17px',
-                                            cursor: 'pointer'
-                                        }}
-                                    >Reject</button>
+                                    >
+                                        View
+                                    </button>
+                                    <button onClick={() => handleApprove(listing.id)}>Approve</button>
+                                    <button onClick={() => {
+                                        console.log("Rejecting listing id:", listing.id);
+                                        handleReject(listing.id);
+                                    }}>Reject</button>
                                 </td>
                             </tr>
                         ))}
