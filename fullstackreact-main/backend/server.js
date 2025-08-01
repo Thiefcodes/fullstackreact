@@ -7,6 +7,7 @@ const multer = require('multer');
 const path = require('path');
 const app = express();
 const nodemailer = require('nodemailer');
+const { WebSocketServer } = require('ws');
 app.use(cors());
 app.use(express.json());
 
@@ -886,6 +887,7 @@ app.post('/api/orders', async (req, res) => {
         await client.query(deleteCartItemsQuery, [cartItemIds]);
 
         await client.query('COMMIT'); // Commit transaction
+        simulateDelivery(newOrderId);
         res.status(201).json({ message: 'Order created successfully!', orderId: newOrderId });
 
     } catch (err) {
@@ -1329,6 +1331,86 @@ app.put('/api/products/:id/stock', async (req, res) => {
 
 
 
-app.listen(5000, () => {
+const server = app.listen(5000, () => {
   console.log('Server running on port 5000');
 });
+
+// ========== jun hong's WEB SOCKET SERVER CODES ===============
+const wss = new WebSocketServer({ server });
+
+// This will store active connections, mapping an orderId to the client watching it.
+const orderWatchers = new Map();
+
+wss.on('connection', (ws) => {
+  console.log('Client connected to WebSocket');
+
+  ws.on('message', (message) => {
+    try {
+        const data = JSON.parse(message);
+        // When the client's OrderDelivery page loads, it will send this message.
+        if (data.type === 'SUBSCRIBE_TO_ORDER') {
+            const orderId = data.orderId;
+            console.log(`Client is now watching order #${orderId}`);
+            // Store the WebSocket connection for this specific orderId.
+            orderWatchers.set(orderId, ws);
+        }
+    } catch (e) {
+        console.error('Failed to parse WebSocket message:', e);
+    }
+  });
+
+  ws.on('close', () => {
+    console.log('Client disconnected');
+    // Clean up the map when a user navigates away.
+    for (const [orderId, clientWs] of orderWatchers.entries()) {
+        if (clientWs === ws) {
+            orderWatchers.delete(orderId);
+            break;
+        }
+    }
+  });
+});
+
+
+// helper function
+const simulateDelivery = (orderId) => {
+    console.log(`Starting delivery simulation for order #${orderId}`);
+
+    // Step 1: Mark as "Shipped" after a delay (e.g., 10 seconds for demo)
+    setTimeout(async () => {
+        try {
+            const updateQuery = `UPDATE orders SET shipped_at = NOW() WHERE id = $1 RETURNING *;`;
+            const result = await db.query(updateQuery, [orderId]);
+            const updatedOrder = result.rows[0];
+            
+            console.log(`Order #${orderId} has been shipped.`);
+
+            // Check if anyone is watching this order.
+            if (orderWatchers.has(orderId)) {
+                const ws = orderWatchers.get(orderId);
+                // Push the update to the specific client watching this order.
+                ws.send(JSON.stringify({ type: 'ORDER_STATUS_UPDATE', order: updatedOrder }));
+            }
+        } catch (err) {
+            console.error(`Error updating order #${orderId} to shipped:`, err);
+        }
+    }, 10000); // 10 seconds
+
+    // Step 2: Mark as "Delivered" after another delay (e.g., 20 seconds total)
+    setTimeout(async () => {
+        try {
+            const updateQuery = `UPDATE orders SET delivered_at = NOW() WHERE id = $1 RETURNING *;`;
+            const result = await db.query(updateQuery, [orderId]);
+            const updatedOrder = result.rows[0];
+
+            console.log(`Order #${orderId} has been delivered.`);
+            
+            if (orderWatchers.has(orderId)) {
+                const ws = orderWatchers.get(orderId);
+                ws.send(JSON.stringify({ type: 'ORDER_STATUS_UPDATE', order: updatedOrder }));
+            }
+        } catch (err) {
+            console.error(`Error updating order #${orderId} to delivered:`, err);
+        }
+    }, 20000); // 20 seconds
+};

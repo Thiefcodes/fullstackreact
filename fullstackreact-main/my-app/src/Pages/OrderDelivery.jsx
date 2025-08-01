@@ -19,6 +19,46 @@ const OrderDelivery = () => {
             }
         };
         fetchOrderDetails();
+
+                // === NEW: WebSocket Connection Logic ===
+        // Note: 'ws://' for local development, 'wss://' for a deployed app with HTTPS.
+        const ws = new WebSocket('ws://localhost:5000');
+
+        ws.onopen = () => {
+            console.log('WebSocket connection established.');
+            // Subscribe this client to updates for this specific order.
+            ws.send(JSON.stringify({
+                type: 'SUBSCRIBE_TO_ORDER',
+                orderId: parseInt(orderId, 10)
+            }));
+        };
+
+        ws.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+            if (message.type === 'ORDER_STATUS_UPDATE') {
+                console.log('Received order status update:', message.order);
+                // Update the order state with the new data from the server.
+                // This will cause the component to re-render with the updated timeline.
+                setOrder(prevOrder => ({
+                    ...prevOrder,
+                    summary: message.order
+                }));
+            }
+        };
+
+        ws.onclose = () => {
+            console.log('WebSocket connection closed.');
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+
+        // This is a cleanup function. It runs when the component unmounts.
+        // It's crucial for preventing memory leaks by closing the connection.
+        return () => {
+            ws.close();
+        };
     }, [orderId]);
 
     const TimelineStep = ({ title, timestamp, isCompleted, isLast = false }) => (
