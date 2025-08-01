@@ -1126,6 +1126,138 @@ app.put('/api/products/:id/stock', async (req, res) => {
     }
 });
 
+
+// =================================================================
+//  ===> WISHLIST MANAGEMENT ROUTES <===
+// =================================================================
+
+/**
+ * @route   GET /api/wishlist/ids/:userId
+ * @desc    Get an array of product IDs in a user's wishlist
+ * @access  Private (for logged-in user)
+ */
+app.get('/api/wishlist/ids/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const query = 'SELECT product_id FROM wishlist_items WHERE user_id = $1';
+        const { rows } = await db.query(query, [userId]);
+        // Return a simple array of IDs, e.g., [1, 15, 23]
+        res.status(200).json(rows.map(row => row.product_id));
+    } catch (err) {
+        console.error('Error fetching wishlist IDs:', err.message);
+        res.status(500).json({ error: 'Server error while fetching wishlist IDs.' });
+    }
+});
+
+/**
+ * @route   GET /api/wishlist/:userId
+ * @desc    Get full product details for all items in a user's wishlist
+ * @access  Private (for logged-in user)
+ */
+app.get('/api/wishlist/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const query = `
+            SELECT p.* FROM product p
+            JOIN wishlist_items w ON p.id = w.product_id
+            WHERE w.user_id = $1;
+        `;
+        const { rows } = await db.query(query, [userId]);
+        res.status(200).json(rows);
+    } catch (err) {
+        console.error('Error fetching wishlist items:', err.message);
+        res.status(500).json({ error: 'Server error while fetching wishlist items.' });
+    }
+});
+
+/**
+ * @route   POST /api/wishlist
+ * @desc    Add an item to a user's wishlist
+ * @access  Private
+ */
+app.post('/api/wishlist', async (req, res) => {
+    const { userId, productId } = req.body;
+    if (!userId || !productId) {
+        return res.status(400).json({ error: 'User ID and Product ID are required.' });
+    }
+    try {
+        const query = `
+            INSERT INTO wishlist_items (user_id, product_id)
+            VALUES ($1, $2)
+            RETURNING *;
+        `;
+        const { rows } = await db.query(query, [userId, productId]);
+        res.status(201).json({ message: 'Item added to wishlist.', item: rows[0] });
+    } catch (err) {
+        // Handle the case where the item is already in the wishlist (violates PRIMARY KEY)
+        if (err.code === '23505') { // '23505' is the PostgreSQL code for unique_violation
+            return res.status(409).json({ error: 'Item is already in the wishlist.' });
+        }
+        console.error('Error adding to wishlist:', err.message);
+        res.status(500).json({ error: 'Server error while adding to wishlist.' });
+    }
+});
+
+/**
+ * @route   DELETE /api/wishlist
+ * @desc    Remove an item from a user's wishlist
+ * @access  Private
+ */
+app.delete('/api/wishlist', async (req, res) => {
+    const { userId, productId } = req.body;
+     if (!userId || !productId) {
+        return res.status(400).json({ error: 'User ID and Product ID are required.' });
+    }
+    try {
+        const query = 'DELETE FROM wishlist_items WHERE user_id = $1 AND product_id = $2;';
+        const result = await db.query(query, [userId, productId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Item not found in wishlist.' });
+        }
+        res.status(200).json({ message: 'Item removed from wishlist.' });
+    } catch (err) {
+        console.error('Error removing from wishlist:', err.message);
+        res.status(500).json({ error: 'Server error while removing from wishlist.' });
+    }
+});
+
+// =================================================================
+//  ===> CATEGORY MANAGEMENT ROUTES <===
+// =================================================================
+
+/**
+ * @route   GET /api/categories/sidebar
+ * @desc    Get all categories with their sub-categories nested for sidebar navigation
+ * @access  Public
+ */
+app.get('/api/categories/sidebar', async (req, res) => {
+    try {
+        // This query uses JSON aggregation to build the nested structure directly in the database
+        const query = `
+            SELECT 
+                c.id, 
+                c.name, 
+                COALESCE(
+                    (SELECT json_agg(
+                        json_build_object('id', s.id, 'name', s.name)
+                        ORDER BY s.name
+                    ) 
+                    FROM sub_categories s 
+                    WHERE s.parent_category_id = c.id), 
+                '[]'::json) AS sub_categories
+            FROM categories c
+            ORDER BY c.name;
+        `;
+        const { rows } = await db.query(query);
+        res.status(200).json(rows);
+    } catch (err) {
+        console.error('Error fetching sidebar categories:', err.message);
+        res.status(500).json({ error: 'Server error while fetching categories.' });
+    }
+});
+
+
 app.listen(5000, () => {
   console.log('Server running on port 5000');
 });

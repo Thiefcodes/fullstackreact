@@ -26,6 +26,8 @@ import InventoryManagement from './Pages/InventoryManagement';
 import CreateProduct       from './Pages/CreateProduct';
 import StockUp             from './Pages/StockUp';
 
+import EcommercePage from './Pages/EcommercePage';
+
 import Logo from "./assets/EcoThrift-logo.png";
 
 const App = () => {
@@ -77,6 +79,7 @@ const App = () => {
               {isLoggedIn && userType !== 'Staff' && user && (
                   <>
                       <div className="navbar-group">
+                          <Link to="/ecommercepage">Shop</Link>
                           <Link to="/marketplace">Marketplace</Link>
                           <Link to="/products/new">List an Item</Link>
                           <Link to="/profile">My Profile</Link>
@@ -111,7 +114,7 @@ const App = () => {
 
       <Routes>
         {/* Public / Auth */}
-        <Route path="/"                element={<MarketplacePage />} />  {/* <-- TEMPORARY PAGE ONLY */}
+        <Route path="/"                element={<EcommercePage />} />  
         <Route path="/login"           element={<LoginPage />} />
         <Route path="/register"        element={<RegisterPage />} />
         <Route path="/register2"       element={<RegisterPage2 />} />
@@ -133,6 +136,9 @@ const App = () => {
         <Route path="/inventory"                   element={<InventoryManagement />} />
         <Route path="/products/create"             element={<CreateProduct />} />
         <Route path="/products/stockup/:id"        element={<StockUp />} />
+
+        <Route path="/ecommercepage"                element={<EcommercePage />} />  
+
 
         {/* Fallback */}
         <Route path="*" element={<div style={{ padding: '2rem' }}><h2>404 — Not Found</h2></div>} />
