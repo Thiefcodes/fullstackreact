@@ -909,7 +909,7 @@ app.get('/api/orders/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
         const query = `
-            SELECT o.id, o.user_order_id, o.total_price, o.ordered_at, o.delivered_at,
+            SELECT o.*, 
                    (SELECT json_agg(p.image_url[1]) FROM order_items oi JOIN marketplaceproducts p ON oi.product_id = p.id WHERE oi.order_id = o.id) as product_images
             FROM orders o
             WHERE o.buyer_id = $1
