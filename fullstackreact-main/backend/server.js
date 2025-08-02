@@ -942,7 +942,7 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
 
         // Get line items for the order
         const itemsQuery = `
-            SELECT p.title, p.size, p.image_url, oi.price_at_purchase
+            SELECT p.title, p.size, p.image_url, p.seller_id, oi.price_at_purchase
             FROM order_items oi
             JOIN marketplaceproducts p ON oi.product_id = p.id
             WHERE oi.order_id = $1;
@@ -982,6 +982,80 @@ app.get('/api/listings/:userId', async (req, res) => {
         res.status(500).json({ error: 'Server error while fetching listings.' });
     }
 });
+// ===============================================
+
+// jun hong's codes (marketplace_reviews GET and POST method)
+// =================================================================
+//  ===>  REVIEW MANAGEMENT ROUTES <===
+// =================================================================
+
+/**
+ * @route   POST /api/reviews
+ * @desc    Submit a new review for an order
+ * @access  Private
+ */
+app.post('/api/reviews', async (req, res) => {
+    const { orderId, buyerId, sellerId, rating, comment } = req.body;
+
+    if (!orderId || !buyerId || !sellerId || !rating) {
+        return res.status(400).json({ error: 'Missing required review information.' });
+    }
+
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Insert the new review
+        const reviewQuery = `
+            INSERT INTO marketplace_reviews (order_id, buyer_id, seller_id, rating, comment)
+            VALUES ($1, $2, $3, $4, $5) RETURNING *;
+        `;
+        const reviewResult = await client.query(reviewQuery, [orderId, buyerId, sellerId, rating, comment]);
+
+        // 2. Update the order's timeline
+        const updateOrderQuery = `
+            UPDATE orders SET review_completed_at = NOW() WHERE id = $1;
+        `;
+        await client.query(updateOrderQuery, [orderId]);
+
+        await client.query('COMMIT');
+        res.status(201).json(reviewResult.rows[0]);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        if (err.code === '23505') { // unique_violation
+            return res.status(409).json({ error: 'A review for this order has already been submitted.' });
+        }
+        console.error('Error submitting review:', err.message);
+        res.status(500).json({ error: 'Server error while submitting review.' });
+    } finally {
+        client.release();
+    }
+});
+
+/**
+ * @route   GET /api/reviews/seller/:sellerId
+ * @desc    Get all reviews for a specific seller
+ * @access  Public
+ */
+app.get('/api/reviews/seller/:sellerId', async (req, res) => {
+    const { sellerId } = req.params;
+    try {
+        const query = `
+            SELECT r.rating, r.comment, r.created_at, u.username AS buyer_username
+            FROM marketplace_reviews r
+            JOIN users u ON r.buyer_id = u.id
+            WHERE r.seller_id = $1
+            ORDER BY r.created_at DESC;
+        `;
+        const { rows } = await db.query(query, [sellerId]);
+        res.status(200).json(rows);
+    } catch (err) {
+        console.error('Error fetching seller reviews:', err.message);
+        res.status(500).json({ error: 'Server error while fetching reviews.' });
+    }
+});
+
 // ===============================================
 
 // =================================================================
@@ -1399,7 +1473,7 @@ const simulateDelivery = (orderId) => {
     // Step 2: Mark as "Delivered" after another delay (e.g., 20 seconds total)
     setTimeout(async () => {
         try {
-            const updateQuery = `UPDATE orders SET delivered_at = NOW() WHERE id = $1 RETURNING *;`;
+            const updateQuery = `UPDATE orders SET delivered_at = NOW(), review_started_at = NOW() WHERE id = $1 RETURNING *;`;
             const result = await db.query(updateQuery, [orderId]);
             const updatedOrder = result.rows[0];
 

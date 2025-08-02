@@ -18,6 +18,8 @@ const PublicUserProfile = () => {
     const [listings, setListings] = useState([]);
     const [loadingListings, setLoadingListings] = useState(true);
     const loggedInUserId = localStorage.getItem('userId');
+    const [reviews, setReviews] = useState([]);
+    const [loadingReviews, setLoadingReviews] = useState(true);
 
 
     const showToast = (message, type = 'success') => {
@@ -49,8 +51,29 @@ const PublicUserProfile = () => {
             }
         }
         fetchUser();
+
+        const fetchReviews = async () => {
+            setLoadingReviews(true);
+            try {
+                const res = await axios.get(`http://localhost:5000/api/reviews/seller/${userId}`);
+                setReviews(res.data);
+            } catch (err) {
+                console.error("Error fetching reviews:", err);
+            } finally {
+                setLoadingReviews(false);
+            }
+        };
+
+        fetchReviews();
     }, [userId]);
 
+    const StarRating = ({ rating }) => (
+        <div>
+            {[...Array(5)].map((_, i) => (
+                <span key={i} style={{ color: i < rating ? 'gold' : 'grey', fontSize: '1.2em' }}>★</span>
+            ))}
+        </div>
+    );
 
     const handleAddToCart = async (product) => {
         const userId = localStorage.getItem('userId');
@@ -155,6 +178,22 @@ const PublicUserProfile = () => {
                     )}
                 </div>
 
+                <div className="public-profile-section">
+                <h2>Reviews</h2>
+                {loadingReviews ? (
+                    <p>Loading reviews...</p>
+                ) : reviews.length > 0 ? (
+                    reviews.map((review, index) => (
+                        <div key={index} style={{ borderBottom: '1px solid #eee', padding: '15px 0' }}>
+                            <StarRating rating={review.rating} />
+                            <p style={{ fontStyle: 'italic' }}>"{review.comment}"</p>
+                            <small style={{ color: '#777' }}>- {review.buyer_username} on {new Date(review.created_at).toLocaleDateString()}</small>
+                        </div>
+                    ))
+                ) : (
+                    <p>This seller has no reviews yet.</p>
+                )}
+                </div>
 
                 <Toast
                     open={toast.open}

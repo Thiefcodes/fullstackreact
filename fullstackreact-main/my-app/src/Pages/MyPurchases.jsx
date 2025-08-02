@@ -28,11 +28,26 @@ const MyPurchases = () => {
     if (loading) return <p>Loading your purchases...</p>;
     if (!userId) return <p>Please log in to see your purchases.</p>;
 
+    const getOrderStatus = (order) => {
+        if (order.review_completed_at) {
+            return { text: 'Completed', color: '#C6F6D5' }; // Green
+        }
+        if (order.delivered_at) {
+            return { text: 'Awaiting Review', color: '#BEE3F8' }; // Blue
+        }
+        if (order.shipped_at) {
+            return { text: 'In Transit', color: '#FEEBC8' }; // Orange
+        }
+        return { text: 'Processing', color: '#E2E8F0' }; // Gray
+    };
+
     return (
         <div style={{ maxWidth: '900px', margin: '0 auto', padding: '20px' }}>
             <h1>My Purchases</h1>
             {orders.length > 0 ? (
-                orders.map(order => (
+                orders.map(order => {
+                    const status = getOrderStatus(order);
+                    return (
                     <Link to={`/orders/${order.id}`} key={order.id} style={{ textDecoration: 'none', color: 'inherit' }}>
                         <div style={{ border: '1px solid #ccc', borderRadius: '8px', padding: '15px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '20px' }}>
                             <div style={{ display: 'flex' }}>
@@ -46,13 +61,14 @@ const MyPurchases = () => {
                                 <p style={{ margin: '5px 0', fontWeight: 'bold' }}>Total: ${order.total_price}</p>
                             </div>
                             <div>
-                                <span style={{ padding: '5px 10px', borderRadius: '15px', background: order.delivered_at ? 'lightgreen' : 'orange', color: 'black' }}>
-                                    {order.delivered_at ? 'Delivered' : 'In Transit'}
+                                <span style={{ padding: '5px 10px', borderRadius: '15px', background: status.color, color: 'black' }}>
+                                    {status.text}
                                 </span>
                             </div>
                         </div>
                     </Link>
-                ))
+                    )
+                })
             ) : (
                 <p>You have not made any purchases yet.</p>
             )}
