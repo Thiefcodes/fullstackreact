@@ -10,7 +10,8 @@ const nodemailer = require('nodemailer');
 const { WebSocketServer } = require('ws');
 app.use(cors());
 app.use(express.json());
-
+const { OpenAI } = require('openai');
+const openai = new OpenAI({ apiKey: "replace it" });
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -19,6 +20,95 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
 });
+
+app.get('/api/test', (req, res) => {
+  res.json({ working: true });
+});
+
+// clothes tagging page
+app.get('/api/marketplaceproducts/untagged', async(req, res) => {
+ try {
+        const result = await db.query(`
+            SELECT mp.*
+            FROM marketplaceproducts mp
+            LEFT JOIN clothestag ct ON mp.id = ct.product_id
+            WHERE ct.id IS NULL
+            ORDER BY mp.created_at DESC
+            LIMIT 50
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching untagged products:', err);
+        res.status(500).send(err.message || 'Server error');
+    }
+});
+
+
+
+app.post('/api/ai-scan', async (req, res) => {
+  const { image_url } = req.body;
+  if (!image_url) return res.status(400).json({ error: "No image_url provided" });
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: "You are a fashion AI. Given an image of clothing, describe its category, main color, and suggest up to 3 tags such as style, season, or mood. Respond as JSON only."
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Analyze this clothing image and return a JSON like: {\"category\":..., \"color\":..., \"tags\": [...]}. Only respond with the JSON." },
+               { type: "image_url", image_url: { url: image_url } }
+          ]
+        }
+      ],
+      max_tokens: 256,
+      temperature: 0.3
+    });
+
+    // The response should be valid JSON
+    const text = completion.choices[0].message.content.trim();
+        console.log('AI raw response:', text);
+    // Attempt to parse JSON
+    let aiData;
+    try {
+      aiData = JSON.parse(text);
+    } catch {
+      return res.status(500).json({ error: "Invalid AI response", ai_response: text });
+    }
+    res.json(aiData);
+
+  } catch (err) {
+    console.error('OpenAI error:', err); // <-- ADD THIS
+    console.error(err);
+    res.status(500).json({ error: "OpenAI error" });
+  }
+});
+
+app.post('/api/clothestag', async (req, res) => {
+  console.log('Received:', req.body); // <-- Add this
+  const { product_id, category, tags, color, image_url, ai_analysis_json } = req.body;
+  if (!product_id || !category)
+    return res.status(400).json({ error: "Missing required fields" });
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO clothestag
+        (product_id, category, tags, color, image_url, ai_analysis_json, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+       RETURNING *`,
+      [product_id, category, tags || null, color || null, image_url || null, ai_analysis_json ? JSON.stringify(ai_analysis_json) : null]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
 
 // ============ JH multer codes =================
 const productMediaStorage = multer.diskStorage({
@@ -1624,3 +1714,4 @@ const simulateDelivery = (orderId) => {
         }
     }, 20000); // 20 seconds
 };
+

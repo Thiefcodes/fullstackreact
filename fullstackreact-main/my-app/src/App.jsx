@@ -33,6 +33,7 @@ import InventoryManagement from './Pages/InventoryManagement';
 import CreateProduct       from './Pages/CreateProduct';
 import StockUp             from './Pages/StockUp';
 import ApproveListing      from './pages/ApproveListing';
+import AdminScan           from './Pages/AdminScan';
 
 import Logo from "./assets/EcoThrift-logo.png";
 
@@ -140,6 +141,7 @@ const App = () => {
                           <Link to="/inventory" className="navbar-link">Manage Inventory</Link>
                           <Link to="/usermanagement" className="navbar-link">Manage Users</Link>
                           <Link to="/approvallisting" className="navbar-link">Approve Listings</Link>
+                          <Link to="/AdminScan" className="navbar-link">Admin scan</Link>
                       </div>
                       <div className="navbar-auth">
                           <button className="logout-btn" onClick={handleLogout}>Logout</button>
@@ -183,6 +185,7 @@ const App = () => {
         <Route path="/products/create"  element={<CreateProduct />} />
         <Route path="/products/stockup/:id" element={<StockUp />} />
         <Route path="/approvallisting"  element={<ApproveListing />} />
+        <Route path="/AdminScan"  element={<AdminScan />} />
 
         {/* Fallback */}
         <Route path="*" element={<div style={{ padding: '2rem' }}><h2>404 — Not Found</h2></div>} />
