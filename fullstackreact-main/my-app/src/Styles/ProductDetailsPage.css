@@ -119,3 +119,24 @@
     display: flex; justify-content: center; align-items: center;
     height: 80vh; font-size: 1.5rem; color: #4b5563;
 }
+
+.product-price-details {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin: 1.5rem 0;
+    color: #111827;
+}
+
+.size-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background-color: #f9fafb;
+    border-color: #e5e7eb;
+}
+
+.stock-indicator {
+    display: block;
+    margin-top: 0.75rem;
+    color: #4b5563;
+    font-size: 0.85rem;
+}

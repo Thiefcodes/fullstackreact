@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import '../Styles/WishlistPage.css'; // We will create this next
+import '../Styles/WishlistPage.css'; 
 
-// --- Reusable Component for "Shop More" items ---
+
 const ShopMoreCard = ({ product }) => {
     const imageUrl = product.image_urls ? product.image_urls.split(',')[0] : 'https://placehold.co/600x400?text=No+Image';
     return (

@@ -23,11 +23,12 @@ const ProductDetailsPage = () => {
     const userId = localStorage.getItem('userId');
 
     const [product, setProduct] = useState(null);
+    const [variants, setVariants] = useState([]);
     const [reviews, setReviews] = useState([]);
     const [wishlist, setWishlist] = useState([]); // Holds array of wishlisted product IDs
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [selectedSize, setSelectedSize] = useState(null);
+    const [selectedVariant, setSelectedVariant] = useState(null);
     const [activeAccordion, setActiveAccordion] = useState(null);
 
     useEffect(() => {
@@ -38,6 +39,7 @@ const ProductDetailsPage = () => {
                 if (!productRes.ok) throw new Error('Product not found.');
                 const productData = await productRes.json();
                 setProduct(productData);
+                setVariants(productData.variants || []);
 
                 const reviewsRes = await fetch(`http://localhost:5000/api/products/${productId}/reviews`);
                 if (reviewsRes.ok) setReviews(await reviewsRes.json());
@@ -54,6 +56,7 @@ const ProductDetailsPage = () => {
         };
         fetchAllData();
     }, [productId, userId]);
+
 
     const isWishlisted = product ? wishlist.includes(product.id) : false;
 
@@ -84,11 +87,11 @@ const ProductDetailsPage = () => {
     };
     
     const handleAddToCart = () => {
-        if (!selectedSize) {
+        if (!selectedVariant) {
             alert('Please select a size.');
             return;
         }
-        alert(`${product.product_name} (${selectedSize}) added to cart! (Note: This is a placeholder as the cart system is separate.)`);
+        alert(`${product.product_name} (Size: ${selectedVariant.size}) added to cart! (Placeholder)`);
     };
     
     const toggleAccordion = (index) => {
@@ -106,7 +109,8 @@ const ProductDetailsPage = () => {
     if (!product) return <div className="page-center">Product not found.</div>;
     
     const imageUrl = product.image_urls ? product.image_urls.split(',')[0] : 'https://placehold.co/600x400?text=No+Image';
-    const SIZES = ["2XS", "XS", "S", "M", "L", "XL", "2XL", "3XL"];
+    const SIZES = ["S", "M", "L", "XL"]; 
+    const availableSizes = variants.map(v => v.size);
 
     return (
         <div className="details-page-container">
@@ -142,17 +146,35 @@ const ProductDetailsPage = () => {
                         {renderStars(4.5)} {/* Placeholder */}
                         <span>({reviews.length} Reviews)</span>
                     </div>
-                    <p className="product-tags">{product.product_tags}</p>
+                    <p className="product-tags">{product.categories}</p>
                     
+                    <p className="product-price-details">
+                        {selectedVariant ? `$${selectedVariant.price}` : 'Select a size to see the price'}
+                    </p>
+
                     <div className="size-selector">
-                        <p className="size-label">In UK/AU sizes</p>
+                        <p className="size-label">Select Size</p>
                         <div className="size-buttons">
-                            {SIZES.map(size => (
-                                <button key={size} className={`size-btn ${selectedSize === size ? 'selected' : ''}`} onClick={() => setSelectedSize(size)}>
-                                    {size}
-                                </button>
-                            ))}
+                            {SIZES.map(size => {
+                                const variant = variants.find(v => v.size === size);
+                                const isAvailable = !!variant;
+                                return (
+                                    <button
+                                        key={size}
+                                        className={`size-btn ${selectedVariant?.size === size ? 'selected' : ''}`}
+                                        onClick={() => setSelectedVariant(variant)}
+                                        disabled={!isAvailable}
+                                    >
+                                        {size}
+                                    </button>
+                                );
+                            })}
                         </div>
+                        {selectedVariant && (
+                            <small className="stock-indicator">
+                                {selectedVariant.stock_amt} in stock
+                            </small>
+                        )}
                     </div>
 
                     <div className="action-buttons">
