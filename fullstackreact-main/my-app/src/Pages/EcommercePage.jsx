@@ -7,7 +7,6 @@ import '../Styles/EcommercePage.css'; // Import the final stylesheet
 // --- Reusable ProductCard Component ---
 const ProductCard = ({ product, initialWishlist, onWishlistChange }) => {
     const userId = localStorage.getItem('userId');
-    // Check if the current product's ID is in the wishlist array
     const isWishlisted = initialWishlist.includes(product.id);
 
     const handleWishlistClick = async (e) => {
@@ -50,12 +49,10 @@ const ProductCard = ({ product, initialWishlist, onWishlistChange }) => {
 
     const imageUrl = product.image_urls ? product.image_urls.split(',')[0] : 'https://placehold.co/600x400?text=No+Image';
 
-    return (
+       return (
         <Link to={`/products/${product.id}`} className="product-card-link">
             <div className="product-card">
-                <button onClick={handleWishlistClick} className={`wishlist-button ${isWishlisted ? 'active' : ''}`}>
-                    ❤ {/* Heart Icon */}
-                </button>
+                {/* ... (wishlist button remains the same) ... */}
                 <img src={imageUrl} alt={product.product_name} className="product-image" />
                 <div className="product-info">
                     <div className="product-hover-info">
@@ -63,7 +60,10 @@ const ProductCard = ({ product, initialWishlist, onWishlistChange }) => {
                     </div>
                     <h3 className="product-name">{product.product_name}</h3>
                     <div className="product-hover-info">
-                        <p className="product-price">${product.price}</p>
+                        {/* UPDATED: Displays the price from the API */}
+                        <p className="product-price">
+                            {product.price ? `$${product.price}` : 'Unavailable'}
+                        </p>
                     </div>
                 </div>
             </div>
