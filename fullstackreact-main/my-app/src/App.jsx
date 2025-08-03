@@ -34,6 +34,7 @@ import CreateProduct       from './Pages/CreateProduct';
 import StockUp             from './Pages/StockUp';
 import ApproveListing      from './pages/ApproveListing';
 import EditProduct from './Pages/EditProduct';
+import AdminScan           from './Pages/AdminScan';
 
 import Logo from "./assets/EcoThrift-logo.png";
 
@@ -185,6 +186,7 @@ const App = () => {
         <Route path="/products/stockup/:id" element={<StockUp />} />
         <Route path="/approvallisting"  element={<ApproveListing />} />
         <Route path="/products/edit/:id" element={<EditProduct />} />
+        <Route path="/AdminScan"  element={<AdminScan />} />
 
         {/* Fallback */}
         <Route path="*" element={<div style={{ padding: '2rem' }}><h2>404 — Not Found</h2></div>} />
