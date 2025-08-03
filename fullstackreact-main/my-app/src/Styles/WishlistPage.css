@@ -1,0 +1,149 @@
+.wishlist-container {
+    max-width: 900px;
+    margin: 2rem auto;
+    padding: 2rem;
+    font-family: 'Inter', sans-serif;
+    position: relative;
+}
+
+.wishlist-title {
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 600;
+    margin-bottom: 2rem;
+}
+
+.wishlist-back-arrow {
+    position: absolute;
+    top: 2.5rem;
+    right: 2.5rem;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.wishlist-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+}
+
+.wishlist-item-card {
+    display: flex;
+    gap: 1.5rem;
+    background-color: #556B58; /* Dark green background */
+    color: #fff;
+    padding: 1.5rem;
+    border-radius: 12px;
+    align-items: center;
+}
+
+.wishlist-item-image {
+    width: 150px;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 8px;
+    background-color: #fff;
+    padding: 0.5rem;
+}
+
+.wishlist-item-details {
+    flex-grow: 1;
+}
+.wishlist-item-details h2 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.5rem;
+}
+.wishlist-item-reviews {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+}
+.wishlist-star-rating {
+    color: #f59e0b;
+}
+.wishlist-item-desc {
+    margin: 0 0 1rem 0;
+    font-size: 0.95rem;
+}
+.wishlist-item-price {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0;
+}
+
+.wishlist-item-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.remove-wishlist-btn {
+    background: none;
+    border: none;
+    color: red;
+    font-size: 1.75rem;
+    cursor: pointer;
+}
+
+.add-to-cart-btn-wishlist {
+    padding: 0.6rem 1.2rem;
+    background: #fff;
+    color: #333;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.shop-more-section {
+    border-top: 1px solid #e5e7eb;
+    padding-top: 2rem;
+}
+.shop-more-title {
+    text-align: center;
+    margin-bottom: 2rem;
+    font-weight: 500;
+}
+.shop-more-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+}
+.shop-more-card-link {
+    text-decoration: none;
+    color: inherit;
+}
+.shop-more-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    text-align: center;
+}
+.shop-more-image {
+    width: 100%;
+    height: 250px;
+    object-fit: cover;
+    border-radius: 8px 8px 0 0;
+}
+.shop-more-name {
+    padding: 1rem;
+    font-weight: 600;
+}
+
+.page-status {
+    text-align: center;
+    font-size: 1.2rem;
+    color: #4b5563;
+    padding: 4rem;
+}
+.page-status.error {
+    color: red;
+}

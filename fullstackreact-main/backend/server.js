@@ -1409,32 +1409,66 @@ app.put('/api/products/:id/stock', async (req, res) => {
 
 // --- CUSTOMER-FACING SHOP ROUTES ---
 app.get('/api/shop/products', async (req, res) => {
+    // subCategoryId is for the sidebar, search is for the search bar
     const { subCategoryId, search, page = 1, limit = 9 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
+
     let queryParams = [];
-    let whereClauses = ["p.status = 'active'"];
-    let baseQuery = `FROM product p LEFT JOIN product_sub_categories psc ON p.id = psc.product_id`;
+    // --- THIS IS THE KEY CHANGE ---
+    // We now accept products where status is 'active' OR where the status is NULL (for your old products)
+    let whereClauses = ["(p.status = 'active' OR p.status IS NULL)"];
+
+    // Base query that joins product with its sub-category mappings
+    let fromClause = 'FROM product p';
+
+    // The JOIN is now added CONDITIONALLY, only when filtering by category.
+    // This makes the default query simpler and more robust.
     if (subCategoryId) {
+        fromClause += ' JOIN product_sub_categories psc ON p.id = psc.product_id';
         queryParams.push(subCategoryId);
         whereClauses.push(`psc.sub_category_id = $${queryParams.length}`);
     }
+
+    // Filtering by Search Term
     if (search) {
         queryParams.push(`%${search}%`);
         whereClauses.push(`(p.product_name ILIKE $${queryParams.length} OR p.product_description ILIKE $${queryParams.length})`);
     }
+
+    // --- Construct Final Queries ---
     const whereString = `WHERE ${whereClauses.join(' AND ')}`;
-    const countQuery = `SELECT COUNT(DISTINCT p.id) ${baseQuery} ${whereString}`;
-    const dataQuery = `SELECT DISTINCT p.* ${baseQuery} ${whereString} ORDER BY p.created_at DESC LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
+
+    // Query to get the total count for pagination
+    // DISTINCT is important for when the JOIN is active, to prevent counting a product multiple times
+    const countQuery = `SELECT COUNT(DISTINCT p.id) ${fromClause} ${whereString}`;
+
+    // Query to get the actual product data
+    const dataQuery = `
+        SELECT DISTINCT p.*
+        ${fromClause}
+        ${whereString}
+        ORDER BY p.created_at DESC
+        LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
+    `;
     const dataParams = [...queryParams, parseInt(limit), offset];
+
     try {
         const countResult = await db.query(countQuery, queryParams);
         const totalProducts = parseInt(countResult.rows[0].count, 10);
         const totalPages = Math.ceil(totalProducts / parseInt(limit));
+
         const productsResult = await db.query(dataQuery, dataParams);
-        res.json({ products: productsResult.rows, totalProducts, totalPages, currentPage: parseInt(page), limit: parseInt(limit) });
+
+        res.json({
+            products: productsResult.rows,
+            totalProducts,
+            totalPages,
+            currentPage: parseInt(page),
+            limit: parseInt(limit)
+        });
     } catch (err) {
         console.error('Error fetching shop products:', err.message);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
 app.get('/api/shop/product/:id', async (req, res) => {
