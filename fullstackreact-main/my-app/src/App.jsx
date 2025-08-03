@@ -1,14 +1,17 @@
-// src/App.jsx
-import React, { useEffect, useState } from 'react';
+// src/App.jsx - CORRECTED VERSION
+
+// FIXED: Added useRef and all necessary component imports
+import React, { useEffect, useState, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import LoginModal from './components/LoginModal';
-import RegisterModal from './components/RegisterModal';
 import './app.css'
 
 // === Auth / Public pages ===
 import UserProfile     from './pages/UserProfile';
 import EditProfile     from './pages/EditProfile';
 import ChangePassword  from './pages/ChangePassword';
+import LoginPage       from './pages/LoginPage';
+import RegisterPage    from './pages/RegisterPage';
+import RegisterPage2   from './pages/RegisterPage2';
 
 // === Team pages ===
 import ViewUserProfile   from './pages/ViewUserProfile';
@@ -16,7 +19,11 @@ import MarketplacePage   from './pages/MarketplacePage';
 import CreateProductPage from './pages/CreateProductPage';
 import CartPage          from './Pages/CartPage';
 import PublicUserProfile from './Pages/PublicUserProfile';
-import CheckoutPage from './Pages/CheckoutPage'; // *** take note for whoever is doing the imports next time, if the imports got error just try renaming the routes cos sometimes its abit buggy
+import CheckoutPage      from './Pages/CheckoutPage';
+import MyPurchases       from './pages/MyPurchases'; 
+import OrderDelivery     from './pages/OrderDelivery'; 
+import MyListings        from './Pages/MyListings';
+import EcommercePage     from './pages/EcommercePage';
 
 // === Admin / Staff pages ===
 import UserManagement      from './pages/UserManagement';
@@ -33,12 +40,12 @@ const App = () => {
   const userType   = localStorage.getItem('userType');
   const [user, setUser] = useState(null);
   const username = localStorage.getItem('username') || '';
-  const [loginOpen, setLoginOpen] = useState(false);
-  const [registerOpen, setRegisterOpen] = useState(false);
-  const [openDropdown, setOpenDropdown] = useState(null);
+  
+  // FIXED: Initialized useRef constants
   const sellingBtnRef = useRef(null);
   const buyingBtnRef = useRef(null);
-
+  // Note: The modal state is no longer needed as we are using pages
+  const [openDropdown, setOpenDropdown] = useState(null);
 
   useEffect(() => {
     async function fetchUser() {
@@ -65,11 +72,11 @@ const App = () => {
               {!isLoggedIn && (
                   <>
                       <div className="navbar-group">
-                          {/* YOUR NEW SHOP LINK FOR GUESTS */}
                           <Link to="/shop">Shop</Link>
                           <Link to="/marketplace">Marketplace</Link>
                       </div>
                       <div className="navbar-auth">
+                          {/* FIXED: Using simple Links to match the Routes */}
                           <Link to="/login">Login</Link>
                           <Link to="/register">Register</Link>
                       </div>
@@ -80,6 +87,7 @@ const App = () => {
               {isLoggedIn && userType !== 'Staff' && user && (
                   <>
                       <div className="navbar-group">
+                          <Link to="/shop">Shop</Link>
                           <Link to="/marketplace">Marketplace</Link>
                           <Link to="/products/new">List an Item</Link>
                           <Link to="/profile">My Profile</Link>
@@ -113,11 +121,11 @@ const App = () => {
           </nav>
 
       <Routes>
-        {/* === YOUR NEW ECOMMERCE ROUTE === */}
+        {/* YOUR ECOMMERCE ROUTE */}
         <Route path="/shop"            element={<EcommercePage />} />
 
         {/* Public / Auth */}
-        <Route path="/"                element={<MarketplacePage />} />  {/* <-- TEMPORARY PAGE ONLY */}
+        <Route path="/"                element={<MarketplacePage />} />
         <Route path="/login"           element={<LoginPage />} />
         <Route path="/register"        element={<RegisterPage />} />
         <Route path="/register2"       element={<RegisterPage2 />} />
@@ -137,12 +145,12 @@ const App = () => {
         <Route path="/listings"        element={<MyListings />} />
 
         {/* Admin / Staff */}
-        <Route path="/usermanagement"              element={<UserManagement />} />
-        <Route path="/products"                    element={<ProductManagement />} />
-        <Route path="/inventory"                   element={<InventoryManagement />} />
-        <Route path="/products/create"             element={<CreateProduct />} />
-        <Route path="/products/stockup/:id"        element={<StockUp />} />
-        <Route path="/approvallisting"             element={<ApproveListing />} />
+        <Route path="/usermanagement"   element={<UserManagement />} />
+        <Route path="/products"         element={<ProductManagement />} />
+        <Route path="/inventory"        element={<InventoryManagement />} />
+        <Route path="/products/create"  element={<CreateProduct />} />
+        <Route path="/products/stockup/:id" element={<StockUp />} />
+        <Route path="/approvallisting"  element={<ApproveListing />} />
 
         {/* Fallback */}
         <Route path="*" element={<div style={{ padding: '2rem' }}><h2>404 — Not Found</h2></div>} />

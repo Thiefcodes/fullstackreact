@@ -909,7 +909,7 @@ app.get('/api/orders/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
         const query = `
-            SELECT o.id, o.user_order_id, o.total_price, o.ordered_at, o.delivered_at,
+            SELECT o.*, 
                    (SELECT json_agg(p.image_url[1]) FROM order_items oi JOIN marketplaceproducts p ON oi.product_id = p.id WHERE oi.order_id = o.id) as product_images
             FROM orders o
             WHERE o.buyer_id = $1
@@ -942,7 +942,7 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
 
         // Get line items for the order
         const itemsQuery = `
-            SELECT p.title, p.size, p.image_url, oi.price_at_purchase
+            SELECT p.title, p.size, p.image_url, p.seller_id, oi.price_at_purchase
             FROM order_items oi
             JOIN marketplaceproducts p ON oi.product_id = p.id
             WHERE oi.order_id = $1;
@@ -982,6 +982,80 @@ app.get('/api/listings/:userId', async (req, res) => {
         res.status(500).json({ error: 'Server error while fetching listings.' });
     }
 });
+// ===============================================
+
+// jun hong's codes (marketplace_reviews GET and POST method)
+// =================================================================
+//  ===>  REVIEW MANAGEMENT ROUTES <===
+// =================================================================
+
+/**
+ * @route   POST /api/reviews
+ * @desc    Submit a new review for an order
+ * @access  Private
+ */
+app.post('/api/reviews', async (req, res) => {
+    const { orderId, buyerId, sellerId, rating, comment } = req.body;
+
+    if (!orderId || !buyerId || !sellerId || !rating) {
+        return res.status(400).json({ error: 'Missing required review information.' });
+    }
+
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Insert the new review
+        const reviewQuery = `
+            INSERT INTO marketplace_reviews (order_id, buyer_id, seller_id, rating, comment)
+            VALUES ($1, $2, $3, $4, $5) RETURNING *;
+        `;
+        const reviewResult = await client.query(reviewQuery, [orderId, buyerId, sellerId, rating, comment]);
+
+        // 2. Update the order's timeline
+        const updateOrderQuery = `
+            UPDATE orders SET review_completed_at = NOW() WHERE id = $1;
+        `;
+        await client.query(updateOrderQuery, [orderId]);
+
+        await client.query('COMMIT');
+        res.status(201).json(reviewResult.rows[0]);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        if (err.code === '23505') { // unique_violation
+            return res.status(409).json({ error: 'A review for this order has already been submitted.' });
+        }
+        console.error('Error submitting review:', err.message);
+        res.status(500).json({ error: 'Server error while submitting review.' });
+    } finally {
+        client.release();
+    }
+});
+
+/**
+ * @route   GET /api/reviews/seller/:sellerId
+ * @desc    Get all reviews for a specific seller
+ * @access  Public
+ */
+app.get('/api/reviews/seller/:sellerId', async (req, res) => {
+    const { sellerId } = req.params;
+    try {
+        const query = `
+            SELECT r.rating, r.comment, r.created_at, u.username AS buyer_username
+            FROM marketplace_reviews r
+            JOIN users u ON r.buyer_id = u.id
+            WHERE r.seller_id = $1
+            ORDER BY r.created_at DESC;
+        `;
+        const { rows } = await db.query(query, [sellerId]);
+        res.status(200).json(rows);
+    } catch (err) {
+        console.error('Error fetching seller reviews:', err.message);
+        res.status(500).json({ error: 'Server error while fetching reviews.' });
+    }
+});
+
 // ===============================================
 
 // =================================================================
@@ -1195,104 +1269,6 @@ app.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-// =================================================================
-//  ===> CUSTOMER-FACING SHOP ROUTES <===
-// =================================================================
-
-/**
- * @route   GET /api/shop/products
- * @desc    Get all products available for customers to view.
- *          Filters by category and handles search/pagination.
- * @access  Public
- */
-app.get('/api/shop/products', async (req, res) => {
-    // subCategoryId is for the sidebar, search is for the search bar
-    const { subCategoryId, search, page = 1, limit = 9 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
-
-    let queryParams = [];
-    let whereClauses = ["p.status = 'active'"]; // <-- IMPORTANT: Only show active products to customers
-
-    // Base query that joins product with its sub-category mappings
-    let baseQuery = `
-        FROM product p
-        LEFT JOIN product_sub_categories psc ON p.id = psc.product_id
-    `;
-
-    // Filtering by Sub-Category
-    if (subCategoryId) {
-        queryParams.push(subCategoryId);
-        whereClauses.push(`psc.sub_category_id = $${queryParams.length}`);
-    }
-
-    // Filtering by Search Term
-    if (search) {
-        queryParams.push(`%${search}%`);
-        whereClauses.push(`(p.product_name ILIKE $${queryParams.length} OR p.product_description ILIKE $${queryParams.length})`);
-    }
-
-    // --- Construct Final Queries ---
-    const whereString = `WHERE ${whereClauses.join(' AND ')}`;
-
-    // Query to get the total count for pagination
-    const countQuery = `SELECT COUNT(DISTINCT p.id) ${baseQuery} ${whereString}`;
-
-    // Query to get the actual product data
-    const dataQuery = `
-        SELECT DISTINCT p.*
-        ${baseQuery}
-        ${whereString}
-        ORDER BY p.created_at DESC
-        LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
-    `;
-    const dataParams = [...queryParams, parseInt(limit), offset];
-
-    try {
-        const countResult = await db.query(countQuery, queryParams);
-        const totalProducts = parseInt(countResult.rows[0].count, 10);
-        const totalPages = Math.ceil(totalProducts / parseInt(limit));
-
-        const productsResult = await db.query(dataQuery, dataParams);
-
-        res.json({
-            products: productsResult.rows,
-            totalProducts,
-            totalPages,
-            currentPage: parseInt(page),
-            limit: parseInt(limit)
-        });
-    } catch (err) {
-        console.error('Error fetching shop products:', err.message);
-        res.status(500).json({ error: 'Server error', details: err.message });
-    }
-});
-
-
-// =================================================================
-//  ===>  SHOP ROUTES <===
-// =================================================================
-
-/**
- * @route   GET /api/shop/product/:id
- * @desc    Get a single product's details for a customer.
- * @access  Public
- */
-app.get('/api/shop/product/:id', async (req, res) => {
-    const { id } = req.params;
-    try {
-        // Only get the product if its status is 'active'
-        const result = await db.query("SELECT * FROM product WHERE id = $1 AND status = 'active'", [id]);
-        if (result.rows.length === 0) {
-            // We send 404 even if the product exists but isn't active, so customers don't see it.
-            return res.status(404).json({ error: 'Product not found or is not available.' });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error(`Error fetching shop product with ID ${id}:`, err.message);
-        res.status(500).json({ error: 'Server error', details: err.message });
-    }
-});
-
 
 // =================================================================
 //  ===> YOUR REVIEW CRUD OPERATIONS <===
@@ -1428,27 +1404,64 @@ app.put('/api/products/:id/stock', async (req, res) => {
 });
 
 // =================================================================
-//  ===> CATEGORY MANAGEMENT ROUTES <===
+//  ===> YOUR NEW DEDICATED SHOP & WISHLIST ROUTES <===
 // =================================================================
+
+// --- CUSTOMER-FACING SHOP ROUTES ---
+app.get('/api/shop/products', async (req, res) => {
+    const { subCategoryId, search, page = 1, limit = 9 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    let queryParams = [];
+    let whereClauses = ["p.status = 'active'"];
+    let baseQuery = `FROM product p LEFT JOIN product_sub_categories psc ON p.id = psc.product_id`;
+    if (subCategoryId) {
+        queryParams.push(subCategoryId);
+        whereClauses.push(`psc.sub_category_id = $${queryParams.length}`);
+    }
+    if (search) {
+        queryParams.push(`%${search}%`);
+        whereClauses.push(`(p.product_name ILIKE $${queryParams.length} OR p.product_description ILIKE $${queryParams.length})`);
+    }
+    const whereString = `WHERE ${whereClauses.join(' AND ')}`;
+    const countQuery = `SELECT COUNT(DISTINCT p.id) ${baseQuery} ${whereString}`;
+    const dataQuery = `SELECT DISTINCT p.* ${baseQuery} ${whereString} ORDER BY p.created_at DESC LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
+    const dataParams = [...queryParams, parseInt(limit), offset];
+    try {
+        const countResult = await db.query(countQuery, queryParams);
+        const totalProducts = parseInt(countResult.rows[0].count, 10);
+        const totalPages = Math.ceil(totalProducts / parseInt(limit));
+        const productsResult = await db.query(dataQuery, dataParams);
+        res.json({ products: productsResult.rows, totalProducts, totalPages, currentPage: parseInt(page), limit: parseInt(limit) });
+    } catch (err) {
+        console.error('Error fetching shop products:', err.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+app.get('/api/shop/product/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await db.query("SELECT * FROM product WHERE id = $1 AND status = 'active'", [id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Product not found or is not available.' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(`Error fetching shop product with ID ${id}:`, err.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// --- CATEGORY MANAGEMENT ROUTES ---
 app.get('/api/categories/sidebar', async (req, res) => {
     try {
-        const query = `
-            SELECT c.id, c.name, 
-                COALESCE((SELECT json_agg(json_build_object('id', s.id, 'name', s.name) ORDER BY s.name) 
-                          FROM sub_categories s WHERE s.parent_category_id = c.id), '[]'::json) AS sub_categories
-            FROM categories c ORDER BY c.name;
-        `;
+        const query = `SELECT c.id, c.name, COALESCE((SELECT json_agg(json_build_object('id', s.id, 'name', s.name) ORDER BY s.name) FROM sub_categories s WHERE s.parent_category_id = c.id), '[]'::json) AS sub_categories FROM categories c ORDER BY c.name;`;
         const { rows } = await db.query(query);
         res.status(200).json(rows);
     } catch (err) {
         console.error('Error fetching sidebar categories:', err.message);
-        res.status(500).json({ error: 'Server error while fetching categories.' });
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
-// =================================================================
-//  ===> WISHLIST MANAGEMENT ROUTES <===
-// =================================================================
+// --- WISHLIST MANAGEMENT ROUTES ---
 app.get('/api/wishlist/ids/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
@@ -1493,7 +1506,6 @@ app.delete('/api/wishlist', async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 });
-
 
 const server = app.listen(5000, () => {
   console.log('Server running on port 5000');
@@ -1563,7 +1575,7 @@ const simulateDelivery = (orderId) => {
     // Step 2: Mark as "Delivered" after another delay (e.g., 20 seconds total)
     setTimeout(async () => {
         try {
-            const updateQuery = `UPDATE orders SET delivered_at = NOW() WHERE id = $1 RETURNING *;`;
+            const updateQuery = `UPDATE orders SET delivered_at = NOW(), review_started_at = NOW() WHERE id = $1 RETURNING *;`;
             const result = await db.query(updateQuery, [orderId]);
             const updatedOrder = result.rows[0];
 
