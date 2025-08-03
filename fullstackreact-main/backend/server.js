@@ -1059,219 +1059,190 @@ app.get('/api/reviews/seller/:sellerId', async (req, res) => {
 // ===============================================
 
 // =================================================================
-//  ===> YOUR PRODUCT CRUD OPERATIONS (for the 'product' table) <===
+//  ===> PRODUCT & VARIANT CRUD OPERATIONS (NEWEST SCHEMA) <===
 // =================================================================
 
-// GET all products with optional search, category filter, and pagination
+// GET all products with their variants, now with category filtering
 app.get('/api/products', async (req, res) => {
-  const { search, category, page = 1, limit = 9 } = req.query;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { search, category, page = 1, limit = 10 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
 
-  // 1) include `status` in the SELECT
-  let query =
-    `SELECT
-       id, created_at, product_name, product_colour, product_material,
-       price, product_description, product_tags, product_points,
-       stock_amt, image_urls, scheduled_stock_amount, scheduled_date,
-       status
-     FROM product
-     WHERE 1=1`;
-  let countQuery = `SELECT COUNT(id) FROM product WHERE 1=1`;
+    try {
+        let whereClauses = [];
+        let queryParams = [];
 
-  const queryParams = [];
-  const countParams = [];
-  let idx = 1;
+        if (search) {
+            queryParams.push(`%${search}%`);
+            whereClauses.push(`(p.product_name ILIKE $${queryParams.length} OR p.product_description ILIKE $${queryParams.length})`);
+        }
+        
+        // Added filtering for the new 'categories' column
+        if (category) {
+            queryParams.push(`%${category}%`);
+            whereClauses.push(`p.categories ILIKE $${queryParams.length}`);
+        }
 
-  if (search) {
-    query += ` AND (product_name ILIKE $${idx} OR product_description ILIKE $${idx})`;
-    countQuery += ` AND (product_name ILIKE $${idx} OR product_description ILIKE $${idx})`;
-    queryParams.push(`%${search}%`);
-    countParams.push(`%${search}%`);
-    idx++;
-  }
-  if (category) {
-    query += ` AND product_tags ILIKE $${idx}`;
-    countQuery += ` AND product_tags ILIKE $${idx}`;
-    queryParams.push(`%${category}%`);
-    countParams.push(`%${category}%`);
-    idx++;
-  }
+        const whereString = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-  query += ` ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`;
-  queryParams.push(parseInt(limit), offset);
+        // The query now omits 'product_colour' from the variant details
+        const query = `
+            SELECT
+                p.*,
+                SUM(pv.stock_amt) AS total_stock,
+                json_agg(json_build_object(
+                    'variant_id', pv.id,
+                    'size', pv.size,
+                    'price', pv.price,
+                    'stock', pv.stock_amt
+                )) AS variants
+            FROM products p
+            LEFT JOIN product_variants pv ON p.id = pv.product_id
+            ${whereString}
+            GROUP BY p.id
+            ORDER BY p.created_at DESC
+            LIMIT $${queryParams.length + 1}
+            OFFSET $${queryParams.length + 2};
+        `;
+        
+        const countQuery = `SELECT COUNT(*) FROM products p ${whereString};`;
 
-  try {
-    const productsResult = await db.query(query, queryParams);
-    const countResult    = await db.query(countQuery, countParams);
+        const finalQueryParams = [...queryParams, limit, offset];
 
-    const totalProducts = parseInt(countResult.rows[0].count, 10);
-    const totalPages    = Math.ceil(totalProducts / parseInt(limit));
+        const productsResult = await db.query(query, finalQueryParams);
+        const countResult = await db.query(countQuery, queryParams);
 
-    res.json({
-      products: productsResult.rows,
-      totalProducts,
-      totalPages,
-      currentPage: parseInt(page),
-      limit: parseInt(limit),
-    });
-  } catch (err) {
-    console.error('Error fetching products:', err.message);
-    res.status(500).json({ error: 'Server error', details: err.message });
-  }
+        const totalProducts = parseInt(countResult.rows[0].count, 10);
+        const totalPages = Math.ceil(totalProducts / parseInt(limit));
+
+        res.json({
+            products: productsResult.rows,
+            totalProducts,
+            totalPages,
+            currentPage: parseInt(page),
+            limit: parseInt(limit),
+        });
+    } catch (err) {
+        console.error('Error fetching products:', err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
 });
 
-// GET a single product by ID
+// GET a single product by ID, including all its variants
+// No changes needed here, as SELECT * adapts automatically.
 app.get('/api/products/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    // SELECT * now returns `status` too, since it's a real column
-    const result = await db.query('SELECT * FROM product WHERE id = $1', [id]);
-    if (!result.rows.length) {
-      return res.status(404).json({ error: 'Product not found' });
+    const { id } = req.params;
+    try {
+        const productResult = await db.query('SELECT * FROM products WHERE id = $1', [id]);
+        if (productResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        
+        const variantsResult = await db.query('SELECT * FROM product_variants WHERE product_id = $1 ORDER BY size', [id]);
+        
+        const product = productResult.rows[0];
+        product.variants = variantsResult.rows;
+
+        res.json(product);
+    } catch (err) {
+        console.error(`Error fetching product ${id}:`, err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(`Error fetching product ${id}:`, err.message);
-    res.status(500).json({ error: 'Server error', details: err.message });
-  }
 });
 
-// POST a new product
+// POST a new product, now including 'categories' and excluding 'product_colour' from variants
 app.post('/api/products', async (req, res) => {
-  let {
-    product_name,
-    product_colour,
-    price,
-    product_description,
-    product_material,
-    product_tags,
-    product_points,
-    stock_amt,
-    image_urls,
-  } = req.body;
+    const { product_name, product_description, product_material, image_urls, categories, variants } = req.body;
 
-  try {
-    // 2) force minimum stock of 40, and set status='active'
-    const initialStock = Math.max(40, Number(stock_amt) || 40);
-    const tagsString   = product_tags   || '';
-    const pointsNum    = product_points || 0;
-    const urlsString   = image_urls     || '';
+    if (!product_name || !variants || !Array.isArray(variants) || variants.length === 0) {
+        return res.status(400).json({ error: 'Product name and at least one variant are required.' });
+    }
 
-    const result = await db.query(
-      `INSERT INTO product (
-         product_name, product_colour, price,
-         product_description, product_material,
-         product_tags, product_points, stock_amt,
-         image_urls, scheduled_stock_amount,
-         scheduled_date, status, created_at
-       ) VALUES (
-         $1, $2, $3,
-         $4, $5,
-         $6, $7, $8,
-         $9, NULL,
-         NULL, 'active', NOW()
-       )
-       RETURNING *`,
-      [
-        product_name, product_colour, price,
-        product_description, product_material,
-        tagsString, pointsNum, initialStock,
-        urlsString,
-      ]
-    );
+    const client = await db.connect();
 
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error('Error adding new product:', err.message);
-    res.status(500).json({ error: 'Server error', details: err.message });
-  }
+    try {
+        await client.query('BEGIN');
+
+        // Insert the core product, now with the 'categories' field
+        const productQuery = `
+            INSERT INTO products (product_name, product_description, product_material, image_urls, categories)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id;
+        `;
+        const productResult = await client.query(productQuery, [product_name, product_description, product_material, image_urls, categories]);
+        const newProductId = productResult.rows[0].id;
+
+        // Loop and insert variants, now without 'product_colour'
+        for (const variant of variants) {
+            const variantQuery = `
+                INSERT INTO product_variants (product_id, size, price, stock_amt, status)
+                VALUES ($1, $2, $3, $4, $5);
+            `;
+            await client.query(variantQuery, [
+                newProductId,
+                variant.size,
+                variant.price,
+                variant.stock_amt || 0,
+                variant.status || 'active'
+            ]);
+        }
+        
+        await client.query('COMMIT');
+        res.status(201).json({ message: 'Product created successfully', productId: newProductId });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error adding new product:', err.message);
+        res.status(500).json({ error: 'Server error while creating product', details: err.message });
+    } finally {
+        client.release();
+    }
 });
 
-// PUT (Update) an existing product
+// PUT (Update) an existing product's CORE details, now including 'categories'
 app.put('/api/products/:id', async (req, res) => {
-  const { id } = req.params;
-  let {
-    product_name,
-    product_colour,
-    price,
-    product_description,
-    product_material,
-    product_tags,
-    product_points,
-    stock_amt,
-    image_urls,
-    scheduled_stock_amount,
-    scheduled_date
-  } = req.body;
+    const { id } = req.params;
+    const { product_name, product_description, product_material, image_urls, categories } = req.body;
 
-  try {
-    // derive the new status in JS
-    let status = 'active';
-    if (scheduled_date && new Date(scheduled_date) > new Date()) {
-      status = 'scheduled';
-    } else if (Number(stock_amt) < 40) {
-      status = 'low';
+    try {
+        const result = await db.query(
+            `UPDATE products
+             SET product_name = $1, product_description = $2, product_material = $3, image_urls = $4, categories = $5
+             WHERE id = $6
+             RETURNING *`,
+            [product_name, product_description, product_material, image_urls, categories, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(`Error updating product ${id}:`, err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
-
-    const tagsString = product_tags || '';
-    const pointsNum  = product_points || 0;
-    const urlsString = image_urls || '';
-
-    const result = await db.query(
-      `UPDATE product
-         SET product_name           = $1,
-             product_colour         = $2,
-             price                  = $3,
-             product_description    = $4,
-             product_material       = $5,
-             product_tags           = $6,
-             product_points         = $7,
-             stock_amt              = $8,
-             image_urls             = $9,
-             scheduled_stock_amount = $10,
-             scheduled_date         = $11,
-             status                 = $12
-       WHERE id = $13
-       RETURNING *`,
-      [
-        product_name, product_colour, price,
-        product_description, product_material,
-        tagsString, pointsNum, stock_amt,
-        urlsString, scheduled_stock_amount || null,
-        scheduled_date   || null,
-        status,
-        id
-      ]
-    );
-
-    if (!result.rows.length) {
-      return res.status(404).json({ error: 'Product not found' });
-    }
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(`Error updating product ${id}:`, err.message);
-    res.status(500).json({ error: 'Server error', details: err.message });
-  }
 });
 
 // DELETE a product
+// No changes needed here.
 app.delete('/api/products/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    const result = await db.query('DELETE FROM product WHERE id = $1 RETURNING *', [id]);
-    if (!result.rows.length) {
-      return res.status(404).json({ error: 'Product not found' });
+    const { id } = req.params;
+    try {
+        const result = await db.query('DELETE FROM products WHERE id = $1 RETURNING *', [id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        
+        res.json({ message: 'Product and all its variants deleted successfully', deletedProduct: result.rows[0] });
+    } catch (err) {
+        console.error(`Error deleting product ${id}:`, err.message);
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
-    res.json({ message: 'Product deleted successfully', deletedProduct: result.rows[0] });
-  } catch (err) {
-    console.error(`Error deleting product ${id}:`, err.message);
-    res.status(500).json({ error: 'Server error', details: err.message });
-  }
 });
 
 
 // =================================================================
-//  ===> YOUR REVIEW CRUD OPERATIONS <===
+//  ===> REVIEW CRUD OPERATIONS (Updated for New Schema) <===
 // =================================================================
 
 // POST a new review
@@ -1286,13 +1257,13 @@ app.post('/api/reviews', async (req, res) => {
     }
 
     try {
-        // Optional: Check if product_id and user_id exist in their respective tables
-        // For product_id:
-        const productExists = await db.query('SELECT id FROM product WHERE id = $1', [product_id]);
+        // Check if the product exists in the new 'products' table.
+        const productExists = await db.query('SELECT id FROM products WHERE id = $1', [product_id]);
         if (productExists.rows.length === 0) {
             return res.status(404).json({ error: 'Product not found.' });
         }
-        // For user_id (assuming users.id is int8):
+        
+        // Check if the user exists.
         const userExists = await db.query('SELECT id FROM users WHERE id = $1', [user_id]);
         if (userExists.rows.length === 0) {
             return res.status(404).json({ error: 'User not found.' });
@@ -1311,6 +1282,7 @@ app.post('/api/reviews', async (req, res) => {
 });
 
 // GET reviews for a specific product
+// This endpoint remains the same as it was already correctly structured.
 app.get('/api/products/:product_id/reviews', async (req, res) => {
     const { product_id } = req.params;
     try {
@@ -1318,7 +1290,7 @@ app.get('/api/products/:product_id/reviews', async (req, res) => {
         const result = await db.query(
             `SELECT r.*, u.username AS reviewer_username, u.firstname AS reviewer_firstname
              FROM reviews r
-             JOIN users u ON r.user_id = u.id -- Assuming users.id is the PK and matches reviews.user_id
+             JOIN users u ON r.user_id = u.id
              WHERE r.product_id = $1 ORDER BY r.created_at DESC`,
             [product_id]
         );
@@ -1330,6 +1302,7 @@ app.get('/api/products/:product_id/reviews', async (req, res) => {
 });
 
 // DELETE a review (e.g., by review ID, for moderation or user self-deletion)
+// This endpoint remains the same.
 app.delete('/api/reviews/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -1345,6 +1318,7 @@ app.delete('/api/reviews/:id', async (req, res) => {
 });
 
 // Calculate Average Rating for a Product
+// This endpoint remains the same.
 app.get('/api/products/:product_id/averagerating', async (req, res) => {
     const { product_id } = req.params;
     try {
@@ -1362,47 +1336,47 @@ app.get('/api/products/:product_id/averagerating', async (req, res) => {
 });
 
 // =================================================================
-//  ===> YOUR STOCK MANAGEMENT / INVENTORY <===
+//  ===> VARIANT STOCK MANAGEMENT / INVENTORY (NEW) <===
 // =================================================================
 
-// Update Product Stock Status (for Inventory Management)
-// This endpoint also handles scheduled_stock_amount, scheduled_date, and now status
-app.put('/api/products/:id/stock', async (req, res) => {
-  const { id } = req.params;
-  const { scheduled_stock_amount, scheduled_date } = req.body;
+// Schedule a stock update for a specific product VARIANT
+app.put('/api/variants/:variantId/stock', async (req, res) => {
+    const { variantId } = req.params;
+    const { scheduled_stock_amount, scheduled_date } = req.body;
 
-  // if neither field is present, bail out
-  if (scheduled_stock_amount == null && !scheduled_date) {
-    return res.status(400).json({ error: 'Nothing to update' });
-  }
-
-  // We'll always mark it "scheduled" when you call this route:
-  const query = `
-    UPDATE product
-       SET scheduled_stock_amount = $1,
-           scheduled_date         = $2,
-           status                 = 'scheduled'
-     WHERE id = $3
-     RETURNING *`;
-
-  try {
-    const { rows } = await db.query(query, [
-      scheduled_stock_amount,
-      scheduled_date,
-      id
-    ]);
-
-    if (!rows.length) {
-      return res.status(404).json({ error: 'Product not found' });
+    // If neither field is present, bail out
+    if (scheduled_stock_amount == null && !scheduled_date) {
+        return res.status(400).json({ error: 'Nothing to update.' });
     }
 
-    res.json(rows[0]);
-  } catch (err) {
-    console.error('Error scheduling stock up:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+    // The query now updates the product_variants table
+    const query = `
+        UPDATE product_variants
+        SET 
+            scheduled_stock_amount = $1,
+            scheduled_date = $2,
+            status = 'scheduled'
+        WHERE id = $3
+        RETURNING *;
+    `;
 
+    try {
+        const { rows } = await db.query(query, [
+            scheduled_stock_amount,
+            scheduled_date,
+            variantId
+        ]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Product variant not found.' });
+        }
+
+        res.json(rows[0]);
+    } catch (err) {
+        console.error('Error scheduling stock update for variant:', err);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+});
 // =================================================================
 //  ===> YOUR NEW DEDICATED SHOP & WISHLIST ROUTES <===
 // =================================================================
