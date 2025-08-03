@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import ReportInfoModal from '../components/ReportInfoModal';
 import '../styles/ViewUserProfile.css';
 import infoIcon from '../assets/info-icon.png';
+import Chev from '../assets/chevron-left.png'
 
 
 const ViewUserProfile = () => {
@@ -77,124 +78,125 @@ const ViewUserProfile = () => {
     if (!user) return <div>Loading...</div>;
 
     return (
-        <div className="vup-container">
-            <div className="vup-back-btn-row">
-                <button
-                    onClick={() => navigate(-1)}
-                    className="vup-back-btn"
-                >← Back</button>
-            </div>
-
-            <h1 className="vup-title">User Profile</h1>
-
-            <div className="vup-profile-card">
+        <div style={{ position: "relative", minHeight: "100vh" }}>
+            <button
+                className="vup-back-btn vup-back-btn-fixed"
+                onClick={() => navigate(-1)}
+                aria-label="Back"
+            >
                 <img
-                    src={user.profilepic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.firstname || user.username)}
-                    alt="Profile"
-                    className="vup-profile-img"
+                    src={Chev}
+                    alt="Back"
+                    className="vup-back-btn-img"
                 />
-                <div className="vup-profile-info">
-                    <p><strong>Last name:</strong> {user.lastname}</p>
-                    <p><strong>First name:</strong> {user.firstname}</p>
-                    <p><strong>Email:</strong> {user.email}</p>
-                    <p>
-                        <strong>Status:</strong>{' '}
-                        <span className={`vup-status${userStatus === 'suspended' ? ' suspended' : ''}`}>
-                            {userStatus || 'active'}
-                        </span>
-                        {userStatus === 'suspended' && suspendUntil && (
-                            <span className="vup-suspend-duration">
-                                {getDurationText(suspendUntil)} left
-                            </span>
-                        )}
-                    </p>
-                    <p><strong>Address:</strong> {user.address}</p>
-                    <p><strong>Country:</strong> {user.country}</p>
-                    <p><strong>Phone:</strong> {user.phone}</p>
-                    <p><strong>Type:</strong> {user.type}</p>
+            </button>
+            <div className="vup-container">
+                <div className="vup-header-row">
+                    <span className="vup-title">User Profile</span>
                 </div>
-            </div>
-
-            <div className="vup-panel">
-                <h2 className="vup-panel-title">Suspension History</h2>
-                {suspensionHistory.length === 0 ? (
-                    <div className="vup-empty">[No suspensions]</div>
-                ) : (
-                    <div className="vup-suspensions-scroll">
+                <div className="vup-profile-card">
+                    <img
+                        className="vup-profile-img"
+                        src={user.profilepic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.firstname || user.username)}
+                        alt="Profile"
+                    />
+                    <div className="vup-profile-info">
+                        <p><strong>Last name:</strong> {user.lastname}</p>
+                        <p><strong>First name:</strong> {user.firstname}</p>
+                        <p><strong>Email:</strong> {user.email}</p>
+                        <p>
+                            <strong>Status:</strong>{' '}
+                            <span
+                                className={`vup-status${userStatus === 'suspended' ? ' suspended' : ''}`}
+                            >
+                                {userStatus || 'active'}
+                            </span>
+                        </p>
+                        <p><strong>Address:</strong> {user.address}</p>
+                        <p><strong>Country:</strong> {user.country}</p>
+                        <p><strong>Phone:</strong> {user.phone}</p>
+                        <p><strong>Type:</strong> {user.type}</p>
+                    </div>
+                </div>
+                <div className="vup-panel">
+                    <div className="vup-panel-title">Suspension History</div>
+                    {suspensionHistory.length === 0 ? (
+                        <div className="vup-empty">[No suspensions]</div>
+                    ) : (
+                        <div className="vup-suspensions-scroll">
+                            <table className="vup-table">
+                                <thead>
+                                    <tr>
+                                        <th className="vup-col-start">Start</th>
+                                        <th className="vup-col-end">End</th>
+                                        <th className="vup-col-reason">Reason</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {suspensionHistory.map((row, idx) => (
+                                        <tr key={idx}>
+                                            <td>{new Date(row.start_time).toLocaleString()}</td>
+                                            <td>{row.end_time ? new Date(row.end_time).toLocaleString() : '-'}</td>
+                                            <td>{row.reason || '-'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+                <div className="vup-reports-panel">
+                    <div className="vup-panel-title">Reports</div>
+                    <div className="vup-reports-scroll">
                         <table className="vup-table">
                             <thead>
                                 <tr>
                                     <th className="vup-col-no">No.</th>
-                                    <th className="vup-col-start">Start</th>
-                                    <th className="vup-col-end">End</th>
-                                    <th className="vup-col-reason">Reason</th>
+                                    <th>Name</th>
+                                    <th>Reason</th>
+                                    <th style={{ textAlign: "center", width: 60 }}>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {suspensionHistory.map((row, idx) => (
-                                <tr key={idx}>
-                                    <td className="vup-col-no">{idx + 1}</td>
-                                    <td className="vup-col-start">{new Date(row.start_time).toLocaleString()}</td>
-                                    <td className="vup-col-end">{row.end_time ? new Date(row.end_time).toLocaleString() : '-'}</td>
-                                    <td className="vup-col-reason">{row.reason || '-'}</td>
-                                </tr>
-                                ))}
+                                {reports.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={4} className="vup-empty">
+                                            [No reports]
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    reports.map((rep, idx) => (
+                                        <tr key={rep.id}>
+                                            <td>{idx + 1}</td>
+                                            <td>
+                                                {rep.reporter_firstname || ''} {rep.reporter_lastname || rep.reporter_username || ''}
+                                            </td>
+                                            <td>{rep.reason}</td>
+                                            <td style={{ textAlign: "center" }}>
+                                                <img
+                                                    src={infoIcon}
+                                                    alt="View Details"
+                                                    className="vup-report-action-img"
+                                                    onClick={() => {
+                                                        setSelectedReport(rep);
+                                                        setShowReportModal(true);
+                                                    }}
+                                                    style={{ width: 30 }}
+                                                />
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     </div>
-                )}
-            </div>
-
-            <div className="vup-reports-panel">
-                <h2 className="vup-panel-title" style={{ marginTop: 0 }}>Reports</h2>
-                <div className="vup-reports-scroll">
-                    <table className="vup-table">
-                        <thead>
-                            <tr>
-                                <th style={{ width: 48 }}>No.</th>
-                                <th>Name</th>
-                                <th>Reason</th>
-                                <th style={{ textAlign: 'center', width: 60 }}>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {reports.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4} className="vup-empty">[No reports]</td>
-                                </tr>
-                            ) : (
-                                reports.map((rep, idx) => (
-                                    <tr key={rep.id}>
-                                        <td>{idx + 1}</td>
-                                        <td>
-                                            {rep.reporter_firstname || ''} {rep.reporter_lastname || rep.reporter_username || ''}
-                                        </td>
-                                        <td>{rep.reason}</td>
-                                        <td style={{ textAlign: 'center' }}>
-                                            <img
-                                                src={infoIcon}
-                                                alt="View Details"
-                                                className="vup-report-action-img"
-                                                onClick={() => {
-                                                    setSelectedReport(rep);
-                                                    setShowReportModal(true);
-                                                }}
-                                                style={{ width: 24 }}
-                                            />
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
                 </div>
+                <ReportInfoModal
+                    show={showReportModal}
+                    report={selectedReport}
+                    onClose={() => setShowReportModal(false)}
+                />
             </div>
-
-            <ReportInfoModal
-                show={showReportModal}
-                report={selectedReport}
-                onClose={() => setShowReportModal(false)}
-            />
         </div>
     );
 };

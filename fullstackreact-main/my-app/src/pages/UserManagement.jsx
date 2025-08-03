@@ -126,77 +126,81 @@ const UserManagement = () => {
         <div className="um-container">
             <h1 className="um-title">Manage Users</h1>
 
-            <div className="um-sorting">
-                <select
-                    value={sortOrder}
-                    onChange={e => setSortOrder(e.target.value)}
-                    className="um-sort-dropdown"
-                >
-                    <option value="num-asc">Number - Asc</option>
-                    <option value="num-desc">Number - Desc</option>
-                    <option value="name-asc">Alphabet - Name</option>
-                    <option value="email-asc">Alphabet - Email</option>
-                </select>
-            </div>
+            <div className="um-section">
+                <div className="um-sorting-row">
+                    <div></div>  {/* This empty div pushes the dropdown to the right */}
+                    <div className="um-sorting">
+                        <select
+                            className="um-sort-dropdown"
+                            value={sortOrder}
+                            onChange={e => setSortOrder(e.target.value)}
+                        >
+                            <option value="num-asc">Number - Asc</option>
+                            <option value="num-desc">Number - Desc</option>
+                            <option value="name-asc">Alphabet - Name</option>
+                            <option value="email-asc">Alphabet - Email</option>
+                        </select>
+                    </div>
+                </div>
 
-            <div className="um-table-wrapper">
-                <table className="um-table">
-                    <thead>
-                        <tr>
-                            <th align="left">No.</th>
-                            <th align="left">Username</th>
-                            <th align="left">Email</th>
-                            <th align="left">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {usersWithStatus.map((user, i) => {
-                            const isSuspended = user.status === 'suspended';
-                            return (
-                                <tr key={user.id} >
-                                    <td className={isSuspended ? 'um-cell-suspended' : ''}>
-                                        {sortOrder === 'num-desc'
-                                            ? usersWithStatus.length - i
-                                            : i + 1}
-                                    </td>
-                                    <td className={isSuspended ? 'um-cell-suspended' : ''}>{user.username}</td>
-                                    <td className={isSuspended ? 'um-cell-suspended' : ''}>{user.email}</td>
-                                    <td>
-                                        <img
-                                            src={InfoIcon}
-                                            alt="view"
-                                            className="um-action-icon"
-                                            onClick={() => navigate(`/users/${user.id}`)}
-                                        />
-                                        <img
-                                            src={GavelIcon}
-                                            alt="suspend"
-                                            className="um-action-icon"
-                                            style={{
-                                                cursor: isSuspended ? 'not-allowed' : 'pointer',
-                                                filter: isSuspended ? 'grayscale(1)' : undefined,
-                                                opacity: isSuspended ? 0.5 : 1
-                                            }}
-                                            onClick={isSuspended ? undefined : () => handleSuspendClick(user)}
-                                            disabled={isSuspended}
-                                        />
-                                        <img
-                                            src={DeleteIcon}
-                                            alt="delete"
-                                            className="um-action-icon"
-                                            onClick={() => {
-                                                setUserToDelete(user);
-                                                setShowDeleteModal(true);
-                                            }}
-                                        />
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+                <div className="um-table-wrapper">
+                    <table className="um-table">
+                        <thead>
+                            <tr>
+                                <th align="left">No.</th>
+                                <th align="left">Username</th>
+                                <th align="left">Email</th>
+                                <th align="left">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {usersWithStatus.map((user, i) => {
+                                const isSuspended = user.status === 'suspended';
+                                return (
+                                    <tr key={user.id} >
+                                        <td className={isSuspended ? 'um-cell-suspended' : ''}>
+                                            {sortOrder === 'num-desc'
+                                                ? usersWithStatus.length - i
+                                                : i + 1}
+                                        </td>
+                                        <td className={isSuspended ? 'um-cell-suspended' : ''}>{user.username}</td>
+                                        <td className={isSuspended ? 'um-cell-suspended' : ''}>{user.email}</td>
+                                        <td>
+                                            <img
+                                                src={InfoIcon}
+                                                alt="view"
+                                                className="um-action-icon"
+                                                onClick={() => navigate(`/users/${user.id}`)}
+                                            />
+                                            <img
+                                                src={GavelIcon}
+                                                alt="suspend"
+                                                className="um-action-icon"
+                                                style={{
+                                                    cursor: isSuspended ? 'not-allowed' : 'pointer',
+                                                    filter: isSuspended ? 'grayscale(1)' : undefined,
+                                                    opacity: isSuspended ? 0.5 : 1
+                                                }}
+                                                onClick={isSuspended ? undefined : () => handleSuspendClick(user)}
+                                                disabled={isSuspended}
+                                            />
+                                            <img
+                                                src={DeleteIcon}
+                                                alt="delete"
+                                                className="um-action-icon"
+                                                onClick={() => {
+                                                    setUserToDelete(user);
+                                                    setShowDeleteModal(true);
+                                                }}
+                                            />
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-
             <SuspendUserModal
                 show={showSuspend}
                 onClose={() => setShowSuspend(false)}

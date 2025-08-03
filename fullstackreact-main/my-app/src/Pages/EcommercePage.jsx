@@ -61,7 +61,7 @@ const EcommercePage = () => {
     useEffect(() => {
         const fetchProducts = async () => {
             try {
-                const response = await fetch('http://localhost:5000/api/products?limit=8');
+                const response = await fetch('http://localhost:5000/api/shop/products?limit=8');
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }
