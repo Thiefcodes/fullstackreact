@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react';
+// src/App.jsx
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import LoginModal from './components/LoginModal';
 import RegisterModal from './components/RegisterModal';
 import './app.css'
-import CartImg from './assets/cart-icon.png'; 
 
 // === Auth / Public pages ===
 import UserProfile     from './pages/UserProfile';
@@ -16,12 +16,7 @@ import MarketplacePage   from './pages/MarketplacePage';
 import CreateProductPage from './pages/CreateProductPage';
 import CartPage          from './Pages/CartPage';
 import PublicUserProfile from './Pages/PublicUserProfile';
-import CheckoutPage from './Pages/CheckoutPage';
-import MyPurchases from './pages/MyPurchases'; 
-import OrderDelivery from './pages/OrderDelivery'; 
-import MyListings from './Pages/MyListings';
-// === YOUR NEW PAGE IMPORT ===
-import EcommercePage from './pages/EcommercePage'; 
+import CheckoutPage from './Pages/CheckoutPage'; // *** take note for whoever is doing the imports next time, if the imports got error just try renaming the routes cos sometimes its abit buggy
 
 // === Admin / Staff pages ===
 import UserManagement      from './pages/UserManagement';
@@ -75,9 +70,8 @@ const App = () => {
                           <Link to="/marketplace">Marketplace</Link>
                       </div>
                       <div className="navbar-auth">
-                          <span className="navbar-login-link" onClick={() => setLoginOpen(true)}>
-                              Login
-                          </span>
+                          <Link to="/login">Login</Link>
+                          <Link to="/register">Register</Link>
                       </div>
                   </>
               )}
@@ -85,53 +79,19 @@ const App = () => {
               {/* User Navbar */}
               {isLoggedIn && userType !== 'Staff' && user && (
                   <>
-                      {/* YOUR NEW SHOP LINK FOR USERS */}
-                      <Link to="/shop" className="navbar-link" onClick={e => e.currentTarget.blur()}>
-                          Shop
-                      </Link>
-                      <Link to="/marketplace" className="navbar-link" onClick={e => e.currentTarget.blur()}>
-                          Marketplace
-                      </Link>
-
-                      {/* Selling Dropdown */}
-                      <div className="dropdown" onMouseEnter={() => setOpenDropdown('selling')} onMouseLeave={() => setOpenDropdown(null)}>
-                          <a href="#" className="dropbtn" ref={sellingBtnRef} onClick={e => e.preventDefault()}>
-                            Selling
-                          </a>
-                          {openDropdown === 'selling' && (
-                              <div className="dropdown-content">
-                                  <Link to="/products/new" onClick={() => setOpenDropdown(null)}>List an Item</Link>
-                                  <Link to="/listings" onClick={() => setOpenDropdown(null)}>My Listings</Link>
-                              </div>
-                          )}
-                      </div>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
-
-                      {/* Buying Dropdown */}
-                      <div className="dropdown" onMouseEnter={() => setOpenDropdown('buying')} onMouseLeave={() => setOpenDropdown(null)}>
-                          <a href="#" className="dropbtn" ref={buyingBtnRef} onClick={e => e.preventDefault()}>
-                            Buying
-                          </a>
-                          {openDropdown === 'buying' && (
-                              <div className="dropdown-content">
-                                  <Link to="/purchases" onClick={() => setOpenDropdown(null)}>My Purchases</Link>
-                              </div>
-                          )}
+                      <div className="navbar-group">
+                          <Link to="/marketplace">Marketplace</Link>
+                          <Link to="/products/new">List an Item</Link>
+                          <Link to="/profile">My Profile</Link>
+                          <Link to="/cart">Cart</Link>
                       </div>
-
                       <div className="navbar-usergroup">
-                          <Link to="/cart" className="navbar-cart-link" onClick={e => e.currentTarget.blur()}>
-                              <img src={CartImg} alt="Cart" className="navbar-cart-icon" />
-                          </Link>
-                          <Link to="/profile" className="navbar-profile-link" onClick={e => e.currentTarget.blur()}>
-                              <img
-                                  src={user.profilepic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.firstname || user.username)}
-                                  alt="Profile"
-                                  className="navbar-profile-pic"
-                              />
-                          </Link>
-                          <button className="logout-btn" onClick={handleLogout}>
-                              Logout
-                          </button>
+                          <img
+                              src={user.profilepic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.firstname || user.username)}
+                              alt="Profile"
+                              className="navbar-profile-pic"
+                          />
+                          <button className="logout-btn" onClick={handleLogout}>Logout</button>
                       </div>
                   </>
               )}
@@ -140,10 +100,10 @@ const App = () => {
               {isLoggedIn && userType === 'Staff' && (
                   <>
                       <div className="navbar-group">
-                          <Link to="/products" className="navbar-link">Manage Products</Link>
-                          <Link to="/inventory" className="navbar-link">Manage Inventory</Link>
-                          <Link to="/usermanagement" className="navbar-link">Manage Users</Link>
-                          <Link to="/approvallisting" className="navbar-link">Approve Listings</Link>
+                          <Link to="/products">Manage Products</Link>
+                          <Link to="/inventory">Manage Inventory</Link>
+                          <Link to="/usermanagement">Manage Users</Link>
+                          <Link to="/approvallisting">Approve Listings</Link>
                       </div>
                       <div className="navbar-auth">
                           <button className="logout-btn" onClick={handleLogout}>Logout</button>
@@ -152,15 +112,15 @@ const App = () => {
               )}
           </nav>
 
-          <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} setRegisterOpen={setRegisterOpen} setLoginOpen={setLoginOpen} />
-          <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} setLoginOpen={setLoginOpen} />
-    
       <Routes>
         {/* === YOUR NEW ECOMMERCE ROUTE === */}
         <Route path="/shop"            element={<EcommercePage />} />
 
         {/* Public / Auth */}
-        <Route path="/"                element={<MarketplacePage />} />
+        <Route path="/"                element={<MarketplacePage />} />  {/* <-- TEMPORARY PAGE ONLY */}
+        <Route path="/login"           element={<LoginPage />} />
+        <Route path="/register"        element={<RegisterPage />} />
+        <Route path="/register2"       element={<RegisterPage2 />} />
         <Route path="/profile"         element={<UserProfile />} />
         <Route path="/editprofile"     element={<EditProfile />} />
         <Route path="/changepassword"  element={<ChangePassword />} />
