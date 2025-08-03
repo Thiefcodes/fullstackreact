@@ -1,15 +1,40 @@
-// src/pages/EcommercePage.jsx - DEFINITIVE VERSION
+// src/pages/EcommercePage.jsx - FULLY INTEGRATED
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import '../Styles/EcommercePage.css'; // Import the final stylesheet
 
 // --- Reusable ProductCard Component ---
-const ProductCard = ({ product }) => {
-    const handleWishlistClick = (e) => {
+const ProductCard = ({ product, initialWishlist, onWishlistChange }) => {
+    const userId = localStorage.getItem('userId');
+    // Check if the current product's ID is in the wishlist array
+    const isWishlisted = initialWishlist.includes(product.id);
+
+    const handleWishlistClick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        console.log(`Added product ${product.id} to wishlist!`);
+        if (!userId) {
+            alert("Please log in to manage your wishlist.");
+            return;
+        }
+
+        // Determine whether to add (POST) or remove (DELETE)
+        const method = isWishlisted ? 'DELETE' : 'POST';
+        try {
+            const response = await fetch('http://localhost:5000/api/wishlist', {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, productId: product.id }),
+            });
+            if (response.ok) {
+                // Notify the parent component of the change for instant UI update
+                onWishlistChange(product.id, !isWishlisted);
+            } else {
+                throw new Error('Could not update wishlist.');
+            }
+        } catch (err) {
+            alert(err.message);
+        }
     };
 
     const renderStars = () => {
@@ -28,10 +53,8 @@ const ProductCard = ({ product }) => {
     return (
         <Link to={`/products/${product.id}`} className="product-card-link">
             <div className="product-card">
-                <button onClick={handleWishlistClick} className="wishlist-button">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12.0001 5.5C10.0001 2.5 5.00006 3.16667 3.50006 6.5C2.00006 9.83333 6.00006 14 12.0001 19.5C18.0001 14 22.0001 9.83333 20.5001 6.5C19.0001 3.16667 14.0001 2.5 12.0001 5.5Z" stroke="#1f2937" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
+                <button onClick={handleWishlistClick} className={`wishlist-button ${isWishlisted ? 'active' : ''}`}>
+                    ❤ {/* Heart Icon */}
                 </button>
                 <img src={imageUrl} alt={product.product_name} className="product-image" />
                 <div className="product-info">
@@ -51,30 +74,50 @@ const ProductCard = ({ product }) => {
 
 const EcommercePage = () => {
     const [products, setProducts] = useState([]);
+    const [wishlist, setWishlist] = useState([]); // State to hold wishlisted product IDs
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const userId = localStorage.getItem('userId');
 
     const [isMensOpen, setMensOpen] = useState(false);
     const [isWomensOpen, setWomensOpen] = useState(false);
     const [isAccessoriesOpen, setAccessoriesOpen] = useState(false);
 
     useEffect(() => {
-        const fetchProducts = async () => {
+        const fetchAllData = async () => {
+            setLoading(true);
             try {
-                const response = await fetch('http://localhost:5000/api/shop/products?limit=8');
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
+                // Fetch products for the shop
+                const productRes = await fetch('http://localhost:5000/api/shop/products?limit=8');
+                if (!productRes.ok) throw new Error('Network response was not ok');
+                const productData = await productRes.json();
+                setProducts(productData.products);
+
+                // If user is logged in, fetch their wishlist
+                if (userId) {
+                    const wishlistRes = await fetch(`http://localhost:5000/api/wishlist/ids/${userId}`);
+                    if (wishlistRes.ok) {
+                        const wishlistData = await wishlistRes.json();
+                        setWishlist(wishlistData);
+                    }
                 }
-                const data = await response.json();
-                setProducts(data.products);
             } catch (err) {
                 setError(err.message);
             } finally {
                 setLoading(false);
             }
         };
-        fetchProducts();
-    }, []);
+        fetchAllData();
+    }, [userId]);
+
+    // This function updates the UI instantly when a heart icon is clicked
+    const handleWishlistChange = (productId, shouldAdd) => {
+        if (shouldAdd) {
+            setWishlist(prev => [...prev, productId]);
+        } else {
+            setWishlist(prev => prev.filter(id => id !== productId));
+        }
+    };
 
     if (loading) return <div>Loading...</div>;
     if (error) return <div>Error: {error}</div>;
@@ -143,7 +186,6 @@ const EcommercePage = () => {
                         </button>
                     </div>
                 </header>
-                {/* FINAL HERO SECTION STRUCTURE */}
                 <section className="hero-section">
                     <div className="hero-card hero-main">
                         <h2>NEW ARRIVALS</h2>
@@ -164,7 +206,12 @@ const EcommercePage = () => {
                     <h2>Best Sellers</h2>
                     <div className="product-grid">
                         {products.map(product => (
-                            <ProductCard key={product.id} product={product} />
+                            <ProductCard 
+                                key={product.id} 
+                                product={product} 
+                                initialWishlist={wishlist}
+                                onWishlistChange={handleWishlistChange}
+                            />
                         ))}
                     </div>
                 </section>
