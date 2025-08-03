@@ -2,16 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-
 const API_BASE_URL = 'http://localhost:5000/api/products';
 // No direct image upload from this page, but keeping the correct URL for consistency if needed later
 const IMAGE_UPLOAD_URL = 'http://localhost:5000/api/uploadimage';
 
-
 const ProductManagement = () => {
     const location = useLocation();
     const navigate = useNavigate();
-
 
     // State for products, pagination, search, and filters
     const [products, setProducts] = useState([]);
@@ -23,18 +20,14 @@ const ProductManagement = () => {
     const [totalPages, setTotalPages] = useState(1);
     const productsPerPage = 9; // As per your requirement
 
-
     // State for average ratings (fetched separately for each product)
     const [productAverageRatings, setProductAverageRatings] = useState({});
 
-
-    // Categories as per your image for filtering product_tags
-    const categories = ['Top', 'Shirt', 'Pants', 'Jeans', 'Skirts', 'Shorts', 'Cargo'];
-
+    // Updated categories to match your new schema - you can modify these based on your actual categories
+    const categories = ['Top', 'Shirt', 'Pants', 'Jeans', 'Skirts', 'Shorts', 'Cargo', 'Casual', 'Summer', 'Winter'];
 
     // Determine if the current path matches a sidebar link for active styling
     const isActive = (path) => location.pathname === path;
-
 
     // Helper to show temporary messages
     const showMessage = (message, isError = false) => {
@@ -48,7 +41,6 @@ const ProductManagement = () => {
             setError(null); // Clear error after 3 seconds
         }, 3000);
     };
-
 
     // Fetch products with filters and pagination
     const fetchProducts = async () => {
@@ -65,7 +57,6 @@ const ProductManagement = () => {
             if (selectedCategory) {
                 params.append('category', selectedCategory);
             }
-
 
             const response = await fetch(`${API_BASE_URL}?${params.toString()}`);
             if (!response.ok) {
@@ -94,7 +85,6 @@ const ProductManagement = () => {
         }
     };
 
-
     // Fetch average rating for a specific product
     const fetchAverageRatingForProduct = async (productId) => {
         try {
@@ -112,21 +102,16 @@ const ProductManagement = () => {
         }
     };
 
-
-
-
     // Effect to refetch products when filters or page change
     useEffect(() => {
         fetchProducts();
     }, [searchQuery, selectedCategory, currentPage]); // Re-run when these dependencies change
-
 
     // Handle search input change
     const handleSearchChange = (e) => {
         setSearchQuery(e.target.value);
         setCurrentPage(1); // Reset to first page on new search
     };
-
 
     // Handle category filter click
     const handleCategoryClick = (category) => {
@@ -135,7 +120,6 @@ const ProductManagement = () => {
         setCurrentPage(1); // Reset to first page on category change
     };
 
-
     // Handle pagination click
     const handlePageChange = (pageNumber) => {
         if (pageNumber > 0 && pageNumber <= totalPages) {
@@ -143,18 +127,15 @@ const ProductManagement = () => {
         }
     };
 
-
     // Handle "Create Product" button click
     const handleCreateProductClick = () => {
         navigate('/products/create'); // Navigate to the dedicated create page
     };
 
-
     // Handle "Edit" button click on a product card
     const handleEditProductClick = (productId) => {
-        navigate(`/products/create?id=${productId}`); // Use the same form for edit, pass ID as query param
+        navigate(`/products/edit/${productId}`); // Updated to use params instead of query
     };
-
 
     // Handle "Delete" button click on a product card
     const handleDeleteProductClick = async (productId, productName) => {
@@ -180,13 +161,11 @@ const ProductManagement = () => {
         }
     };
 
-
     // Function to render star icons based on rating
     const renderStars = (rating) => {
         const fullStars = Math.floor(rating);
         const halfStar = rating % 1 >= 0.5;
         const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
-
 
         return (
             <div className="star-rating-container">
@@ -209,8 +188,31 @@ const ProductManagement = () => {
         );
     };
 
+    // Helper function to get the display price (from variants)
+    const getDisplayPrice = (product) => {
+        if (product.variants && product.variants.length > 0) {
+            // Show the first variant's price, or you could show a price range
+            return parseFloat(product.variants[0].price).toFixed(2);
+        }
+        return '0.00';
+    };
 
-
+    // Helper function to format image URLs
+    const formatImageUrl = (imageUrls) => {
+        if (!imageUrls) return `https://placehold.co/400x300/E0E0E0/333333?text=No+Image`;
+        
+        // Handle both string (comma-separated) and array formats
+        let urlArray;
+        if (typeof imageUrls === 'string') {
+            urlArray = imageUrls.split(',').map(url => url.trim()).filter(url => url);
+        } else if (Array.isArray(imageUrls)) {
+            urlArray = imageUrls.filter(url => url && url.trim());
+        } else {
+            return `https://placehold.co/400x300/E0E0E0/333333?text=No+Image`;
+        }
+        
+        return urlArray.length > 0 ? urlArray[0] : `https://placehold.co/400x300/E0E0E0/333333?text=No+Image`;
+    };
 
     return (
         <div className="product-management-container">
@@ -245,16 +247,11 @@ const ProductManagement = () => {
                 </nav>
             </aside>
 
-
             {/* Main Content Area */}
             <div className="main-content-area">
-                {/* Removed the EcoThrift top header as per instruction */}
-
-
                 {/* Page Content */}
                 <main className="page-content">
                     <h1 className="page-title">Product Management</h1>
-
 
                     {/* Search and Filter */}
                     <div className="filter-bar">
@@ -287,7 +284,6 @@ const ProductManagement = () => {
                         </button>
                     </div>
 
-
                     {/* Categories */}
                     <div className="categories-section">
                         <h2 className="categories-title">Categories</h2>
@@ -303,7 +299,6 @@ const ProductManagement = () => {
                             ))}
                         </div>
                     </div>
-
 
                     {/* Product Grid */}
                     {error && (
@@ -321,7 +316,7 @@ const ProductManagement = () => {
                                 <div key={product.id} className="product-card">
                                     <div className="product-image-container">
                                         <img
-                                            src={product.image_urls ? product.image_urls.split(',')[0].trim() : `https://placehold.co/400x300/E0E0E0/333333?text=No+Image`}
+                                            src={formatImageUrl(product.image_urls)}
                                             alt={product.product_name || 'Product'}
                                             className="product-image"
                                             onError={(e) => {
@@ -332,13 +327,25 @@ const ProductManagement = () => {
                                     </div>
                                     <div className="product-info">
                                         <h3 className="product-name">{product.product_name}</h3>
-                                        <p className="product-price">${parseFloat(product.price).toFixed(2)}</p>
+                                        <p className="product-price">${getDisplayPrice(product)}</p>
                                         <div className="product-rating-section">
                                             <span className="product-rating-value">
                                                 {productAverageRatings[product.id] ? parseFloat(productAverageRatings[product.id]).toFixed(1) : '0.0'}
                                             </span>
                                             {renderStars(parseFloat(productAverageRatings[product.id] || 0))}
                                         </div>
+                                        {/* Display total stock from all variants */}
+                                        <div className="product-stock">
+                                            <span className="stock-label">Total Stock: </span>
+                                            <span className="stock-value">{product.total_stock || 0}</span>
+                                        </div>
+                                        {/* Display categories */}
+                                        {product.categories && (
+                                            <div className="product-categories">
+                                                <span className="categories-label">Categories: </span>
+                                                <span className="categories-value">{product.categories}</span>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="product-actions">
                                         <button
@@ -364,7 +371,6 @@ const ProductManagement = () => {
                             ))}
                         </div>
                     )}
-
 
                     {/* Pagination */}
                     {totalPages > 1 && (
@@ -398,7 +404,6 @@ const ProductManagement = () => {
                 </main>
             </div>
 
-
             {/* Custom CSS for Product Management */}
             <style jsx>{`
                 .product-management-container {
@@ -409,7 +414,6 @@ const ProductManagement = () => {
                     -webkit-font-smoothing: antialiased;
                     -moz-osx-font-smoothing: grayscale;
                 }
-
 
                 /* Sidebar Styles (reused from InventoryManagement) */
                 .sidebar {
@@ -466,7 +470,6 @@ const ProductManagement = () => {
                     margin-right: 12px; /* mr-3 */
                 }
 
-
                 /* Main Content Area Styles */
                 .main-content-area {
                     flex: 1; /* flex-1 */
@@ -483,7 +486,6 @@ const ProductManagement = () => {
                     color: #1f2937; /* text-gray-800 */
                     margin-bottom: 24px; /* mb-6 */
                 }
-
 
                 /* Message Styles */
                 .error-message {
@@ -504,7 +506,6 @@ const ProductManagement = () => {
                     font-size: 1.25rem; /* text-xl */
                     margin-top: 40px; /* mt-10 */
                 }
-
 
                 /* Filter Bar (Search, Filter Button, Create Button) */
                 .filter-bar {
@@ -578,7 +579,6 @@ const ProductManagement = () => {
                     margin-right: 8px; /* mr-2 */
                 }
 
-
                 /* Categories Section */
                 .categories-section {
                     margin-bottom: 32px; /* mb-8 */
@@ -616,15 +616,12 @@ const ProductManagement = () => {
                     color: #4b5563; /* text-gray-700 */
                 }
 
-
-                /* ---- BEGIN NEW PRODUCT GRID STYLING ---- */
-                /* Enforce 4 columns on large screens and fixed size cards */
+                /* Product Grid Styling */
                 .product-grid {
                     display: grid;
                     grid-template-columns: repeat(4, 1fr);
                     gap: 32px; /* gap-8 */
                 }
-
 
                 .product-card {
                     background-color: #ffffff;
@@ -633,14 +630,11 @@ const ProductManagement = () => {
                     overflow: hidden;
                     display: flex;
                     flex-direction: column;
-                   
-                    /* Key change: fixed height for consistent card size */
-                    height: 480px; /* You can adjust this value as needed */
+                    height: 520px; /* Increased to accommodate new info */
                 }
                
                 .product-image-container {
                     position: relative;
-                    /* Key change: fixed height for all images */
                     height: 250px;
                     width: 100%;
                     overflow: hidden;
@@ -649,36 +643,31 @@ const ProductManagement = () => {
                 .product-image {
                     width: 100%;
                     height: 100%;
-                    object-fit: cover; /* This will prevent image stretching */
+                    object-fit: cover;
                     transition: transform 0.2s ease-in-out;
                 }
 
-
                 .product-image:hover {
-                    transform: scale(1.05); /* Optional: a slight zoom effect on hover */
+                    transform: scale(1.05);
                 }
-
 
                 .product-info {
                     padding: 20px;
-                    flex-grow: 1; /* Allows this section to fill remaining space */
+                    flex-grow: 1;
                     display: flex;
                     flex-direction: column;
                     justify-content: space-between;
                 }
-
 
                 .product-name {
                     font-size: 1.25rem;
                     font-weight: 600;
                     color: #1f2937;
                     margin-bottom: 8px;
-                    /* Prevent long names from breaking the card */
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
                 }
-
 
                 .product-price {
                     color: #047857;
@@ -686,7 +675,6 @@ const ProductManagement = () => {
                     font-weight: bold;
                     margin-bottom: 12px;
                 }
-
 
                 .product-rating-section {
                     display: flex;
@@ -718,12 +706,49 @@ const ProductManagement = () => {
                 .star-icon.empty {
                     color: #d1d5db;
                 }
+
+                .product-stock {
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 8px;
+                    font-size: 0.875rem;
+                }
+
+                .stock-label {
+                    color: #6b7280;
+                    font-weight: 500;
+                }
+
+                .stock-value {
+                    color: #059669;
+                    font-weight: 600;
+                }
+
+                .product-categories {
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 12px;
+                    font-size: 0.875rem;
+                }
+
+                .categories-label {
+                    color: #6b7280;
+                    font-weight: 500;
+                }
+
+                .categories-value {
+                    color: #4b5563;
+                    font-weight: 500;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
                
                 .product-actions {
                     display: flex;
                     justify-content: space-between;
                     gap: 10px;
-                    margin-top: auto; /* Pushes the buttons to the bottom */
+                    margin-top: auto;
                 }
                
                 .action-button {
@@ -739,7 +764,6 @@ const ProductManagement = () => {
                     transition: background-color 0.2s ease-in-out;
                 }
 
-
                 .edit-button {
                     background-color: #3b82f6; /* bg-blue-500 */
                     color: #ffffff;
@@ -749,12 +773,10 @@ const ProductManagement = () => {
                     background-color: #2563eb; /* hover:bg-blue-600 */
                 }
 
-
                 .delete-button {
                     background-color: #ef4444; /* bg-red-500 */
                     color: #ffffff;
                 }
-
 
                 .delete-button:hover {
                     background-color: #dc2626; /* hover:bg-red-600 */
@@ -795,27 +817,26 @@ const ProductManagement = () => {
                     border-color: #10b981;
                 }
 
-
-                /* ---- RESPONSIVE BREAKPOINTS FOR THE NEW GRID ---- */
-                @media (max-width: 1536px) { /* Adjust for larger desktops if needed */
+                /* Responsive Breakpoints */
+                @media (max-width: 1536px) {
                   .product-grid {
                     grid-template-columns: repeat(4, 1fr);
                   }
                 }
                
-                @media (max-width: 1280px) { /* Adjust for smaller laptops */
+                @media (max-width: 1280px) {
                   .product-grid {
                     grid-template-columns: repeat(3, 1fr);
                   }
                 }
                
-                @media (max-width: 1024px) { /* Tablets */
+                @media (max-width: 1024px) {
                   .product-grid {
                     grid-template-columns: repeat(2, 1fr);
                   }
                 }
                
-                @media (max-width: 640px) { /* Mobile phones */
+                @media (max-width: 640px) {
                   .product-grid {
                     grid-template-columns: 1fr;
                   }
@@ -825,5 +846,4 @@ const ProductManagement = () => {
     );
 };
 
-
-export default ProductManagement;
+export default ProductManagement; 

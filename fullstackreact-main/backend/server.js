@@ -1093,7 +1093,9 @@ app.get('/api/products', async (req, res) => {
                     'variant_id', pv.id,
                     'size', pv.size,
                     'price', pv.price,
-                    'stock', pv.stock_amt
+                    'stock', pv.stock_amt,
+                    'status', pv.status,                   -- ADDED THIS LINE
+                    'scheduled_date', pv.scheduled_date   -- ADDED THIS LINE
                 )) AS variants
             FROM products p
             LEFT JOIN product_variants pv ON p.id = pv.product_id
@@ -1128,7 +1130,6 @@ app.get('/api/products', async (req, res) => {
 });
 
 // GET a single product by ID, including all its variants
-// No changes needed here, as SELECT * adapts automatically.
 app.get('/api/products/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -1198,18 +1199,19 @@ app.post('/api/products', async (req, res) => {
     }
 });
 
-// PUT (Update) an existing product's CORE details, now including 'categories'
+// PUT (Update) an existing product's description ONLY
 app.put('/api/products/:id', async (req, res) => {
     const { id } = req.params;
-    const { product_name, product_description, product_material, image_urls, categories } = req.body;
+    const { product_description } = req.body;
+
+    if (product_description === undefined) {
+        return res.status(400).json({ error: 'product_description is required.' });
+    }
 
     try {
         const result = await db.query(
-            `UPDATE products
-             SET product_name = $1, product_description = $2, product_material = $3, image_urls = $4, categories = $5
-             WHERE id = $6
-             RETURNING *`,
-            [product_name, product_description, product_material, image_urls, categories, id]
+            `UPDATE products SET product_description = $1 WHERE id = $2 RETURNING *`,
+            [product_description, id]
         );
 
         if (result.rows.length === 0) {
@@ -1222,8 +1224,33 @@ app.put('/api/products/:id', async (req, res) => {
     }
 });
 
-// DELETE a product
-// No changes needed here.
+// NEW: Add this endpoint to handle price updates
+app.put('/api/products/:id/price', async (req, res) => {
+    const { id: productId } = req.params;
+    const { price } = req.body;
+
+    if (price === undefined || isNaN(parseFloat(price))) {
+        return res.status(400).json({ error: 'A valid price is required.' });
+    }
+
+    try {
+        const result = await db.query(
+            `UPDATE product_variants SET price = $1 WHERE product_id = $2 RETURNING *`,
+            [parseFloat(price), productId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'No variants found for this product.' });
+        }
+        
+        res.json({ message: `Price updated for ${result.rowCount} variants.` });
+    } catch (err) {
+        console.error(`Error updating price for product ${productId}:`, err);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+});
+
+// DELETE a product and its variants (via ON DELETE CASCADE)
 app.delete('/api/products/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -1336,46 +1363,55 @@ app.get('/api/products/:product_id/averagerating', async (req, res) => {
 });
 
 // =================================================================
-//  ===> VARIANT STOCK MANAGEMENT / INVENTORY (NEW) <===
+//  ===> VARIANT STOCK MANAGEMENT / INVENTORY (FIXED) <===
 // =================================================================
 
-// Schedule a stock update for a specific product VARIANT
+// Update stock for a specific product VARIANT (handles immediate and scheduled)
 app.put('/api/variants/:variantId/stock', async (req, res) => {
     const { variantId } = req.params;
-    const { scheduled_stock_amount, scheduled_date } = req.body;
+    const { stock_amt, scheduled_stock_amount, scheduled_date } = req.body;
 
-    // If neither field is present, bail out
-    if (scheduled_stock_amount == null && !scheduled_date) {
-        return res.status(400).json({ error: 'Nothing to update.' });
-    }
-
-    // The query now updates the product_variants table
-    const query = `
-        UPDATE product_variants
-        SET 
-            scheduled_stock_amount = $1,
-            scheduled_date = $2,
-            status = 'scheduled'
-        WHERE id = $3
-        RETURNING *;
-    `;
-
-    try {
-        const { rows } = await db.query(query, [
-            scheduled_stock_amount,
-            scheduled_date,
-            variantId
-        ]);
-
-        if (rows.length === 0) {
-            return res.status(404).json({ error: 'Product variant not found.' });
+    // Handle IMMEDIATE stock update
+    if (stock_amt !== undefined) {
+        if (isNaN(parseInt(stock_amt))) {
+            return res.status(400).json({ error: 'A valid stock amount is required.' });
         }
-
-        res.json(rows[0]);
-    } catch (err) {
-        console.error('Error scheduling stock update for variant:', err);
-        res.status(500).json({ error: 'Server error', details: err.message });
+        try {
+            const result = await db.query(
+                `UPDATE product_variants SET stock_amt = $1 WHERE id = $2 RETURNING *;`,
+                [parseInt(stock_amt, 10), variantId]
+            );
+            if (result.rows.length === 0) return res.status(404).json({ error: 'Product variant not found.' });
+            return res.json(result.rows[0]);
+        } catch (err) {
+            console.error(`Error updating stock for variant ${variantId}:`, err);
+            return res.status(500).json({ error: 'Server error', details: err.message });
+        }
     }
+
+    // Handle SCHEDULED stock update
+    if (scheduled_stock_amount !== undefined && scheduled_date !== undefined) {
+        if (isNaN(parseInt(scheduled_stock_amount))) {
+            return res.status(400).json({ error: 'A valid scheduled stock amount is required.' });
+        }
+        try {
+            // FIX: Changed 'scheduled_stock_amount' to 'scheduled_stockamt' to match the database schema.
+            const result = await db.query(
+                `UPDATE product_variants
+                 SET scheduled_stockamt = $1, scheduled_date = $2, status = 'scheduled'
+                 WHERE id = $3 RETURNING *;`,
+                [parseInt(scheduled_stock_amount, 10), scheduled_date, variantId]
+            );
+            if (result.rows.length === 0) return res.status(404).json({ error: 'Product variant not found.' });
+            return res.json(result.rows[0]);
+        } catch (err) {
+            console.error('Error scheduling stock update for variant:', err);
+            return res.status(500).json({ error: 'Server error', details: err.message });
+        }
+    }
+    
+    // If neither block runs, the request is invalid.
+    return res.status(400).json({ error: 'Invalid request. Provide either stock_amt for an immediate update or scheduled_stock_amount and scheduled_date for a scheduled update.' });
 });
 // =================================================================
 //  ===> YOUR NEW DEDICATED SHOP & WISHLIST ROUTES <===

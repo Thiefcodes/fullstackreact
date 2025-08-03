@@ -9,8 +9,8 @@ const InventoryManagement = () => {
   const navigate = useNavigate();
 
   const [products, setProducts] = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   const isActive = (path) => location.pathname === path;
@@ -44,16 +44,37 @@ const InventoryManagement = () => {
     fetchProducts();
   }, []);
 
-  // new three-state logic
-  const getStockStatus = (product) => {
+  // Updated stock status logic for variants
+  const getProductStatus = (product) => {
     const now = new Date();
-    if (product.scheduled_date && new Date(product.scheduled_date) > now) {
+    
+    // Check if any variant is scheduled
+    const hasScheduledVariant = product.variants?.some(v => 
+      v.scheduled_date && new Date(v.scheduled_date) > now
+    );
+    
+    if (hasScheduledVariant) {
       return { status: 'Scheduled', className: 'status-scheduled' };
-    } else if (product.stock_amt < 40) {
-      return { status: 'Low', className: 'status-low' };
-    } else {
-      return { status: 'Active', className: 'status-active' };
     }
+    
+    // Check if any variant is low on stock
+    const hasLowStock = product.variants?.some(v => {
+      // S and XL variants: low if below 10
+      if (v.size === 'S' || v.size === 'XL') {
+        return v.stock < 10;
+      }
+      // M and L variants: low if below 15
+      if (v.size === 'M' || v.size === 'L') {
+        return v.stock < 15;
+      }
+      return false;
+    });
+    
+    if (hasLowStock) {
+      return { status: 'Low', className: 'status-low' };
+    }
+    
+    return { status: 'Active', className: 'status-active' };
   };
 
   const handleEditClick = (id) => {
@@ -77,6 +98,19 @@ const InventoryManagement = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Helper to display variant stock details
+  const getVariantStockDisplay = (variants) => {
+    if (!variants || variants.length === 0) return 'No variants';
+    
+    return variants
+      .sort((a, b) => {
+        const sizeOrder = { 'S': 1, 'M': 2, 'L': 3, 'XL': 4 };
+        return (sizeOrder[a.size] || 5) - (sizeOrder[b.size] || 5);
+      })
+      .map(v => `${v.size}:${v.stock}`)
+      .join(' | ');
   };
 
   return (
@@ -120,19 +154,21 @@ const InventoryManagement = () => {
                   <tr>
                     <th>Product Name</th>
                     <th>Product ID</th>
-                    <th>Stock</th>
+                    <th>Stock by Size</th>
+                    <th>Total Stock</th>
                     <th>Status</th>
                     <th className="text-center">Changes</th>
                   </tr>
                 </thead>
                 <tbody>
                   {products.map((p) => {
-                    const { status, className } = getStockStatus(p);
+                    const { status, className } = getProductStatus(p);
                     return (
                       <tr key={p.id}>
                         <td>{p.product_name}</td>
                         <td>{p.id}</td>
-                        <td>{p.stock_amt}</td>
+                        <td className="variant-stock">{getVariantStockDisplay(p.variants)}</td>
+                        <td>{p.total_stock || 0}</td>
                         <td>
                           <span className={`status-badge ${className}`}>
                             {status}
@@ -260,6 +296,11 @@ const InventoryManagement = () => {
           text-transform: uppercase;
           color: #6b7280;
         }
+        .variant-stock {
+          font-family: monospace;
+          font-size: 0.875rem;
+          color: #374151;
+        }
         /* ==== STATUS BADGES ==== */
         .status-badge {
           padding: 4px 8px;
@@ -298,6 +339,9 @@ const InventoryManagement = () => {
         }
         .delete-button {
           color: #ef4444;
+        }
+        .text-center {
+          text-align: center;
         }
       `}</style>
     </div>

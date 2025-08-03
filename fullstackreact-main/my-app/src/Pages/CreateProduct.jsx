@@ -3,38 +3,38 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 const API_BASE_URL = 'http://localhost:5000/api/products';
-const IMAGE_UPLOAD_URL = 'http://localhost:5000/api/uploadimage'; // Updated to new unified endpoint
+const IMAGE_UPLOAD_URL = 'http://localhost:5000/api/uploadimage'; // Working endpoint
+const SIZES = ['S', 'M', 'L', 'XL'];
 
 const CreateProduct = () => {
+    const { id: productId } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
-    const queryParams = new URLSearchParams(location.search);
-    const productId = queryParams.get('id'); // Get product ID if in edit mode
+    const isEditMode = !!productId;
 
-    const [newProduct, setNewProduct] = useState({
+    // State for core product details
+    const [product, setProduct] = useState({
         product_name: '',
-        product_colour: '',
-        price: '',
-        product_description: '', // Fixed: Use the correct DB field name
+        product_description: '',
         product_material: '',
-        product_tags: '', // Comma-separated string for input
-        product_points: '',
-        stock_amt: '',
-        image_urls: '', // Comma-separated string for input
+        categories: '',
+        image_urls: [], // Always treat as an array
     });
+    
+    const [price, setPrice] = useState('');
+    const [variants, setVariants] = useState(SIZES.map(size => ({ size, stock_amt: '', variant_id: null })));
+    
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
     const [selectedFiles, setSelectedFiles] = useState([]);
-    const [isEditMode, setIsEditMode] = useState(false);
 
     // Determine if the current path matches a sidebar link for active styling
     const isActive = (path) => location.pathname === path;
 
     // Fetch product data if in edit mode
     useEffect(() => {
-        if (productId) {
-            setIsEditMode(true);
+        if (isEditMode) {
             setLoading(true);
             const fetchProduct = async () => {
                 try {
@@ -43,17 +43,33 @@ const CreateProduct = () => {
                         throw new Error(`Failed to fetch product with ID ${productId}`);
                     }
                     const data = await response.json();
-                    setNewProduct({
+                    
+                    // Set product data
+                    setProduct({
                         product_name: data.product_name || '',
-                        product_colour: data.product_colour || '',
-                        price: data.price || '',
-                        product_description: data.product_description || '', // Fixed: Use correct field name
+                        product_description: data.product_description || '',
                         product_material: data.product_material || '',
-                        product_tags: data.product_tags || '',
-                        product_points: data.product_points || '',
-                        stock_amt: data.stock_amt || '',
-                        image_urls: data.image_urls || '', // Keep existing image URLs
+                        categories: data.categories || '',
+                        image_urls: Array.isArray(data.image_urls) ? data.image_urls : 
+                                   (data.image_urls ? data.image_urls.split(',').map(url => url.trim()).filter(url => url) : []),
                     });
+
+                    // Set price from first variant (all variants have same price)
+                    if (data.variants && data.variants.length > 0) {
+                        setPrice(data.variants[0].price || '');
+                    }
+
+                    // Map variants to our standard sizes
+                    const fetchedVariants = data.variants || [];
+                    setVariants(SIZES.map(size => {
+                        const variant = fetchedVariants.find(v => v.size === size);
+                        return {
+                            size,
+                            stock_amt: variant ? variant.stock_amt || '' : '',
+                            variant_id: variant ? variant.variant_id : null
+                        };
+                    }));
+
                 } catch (err) {
                     console.error("Error fetching product for edit:", err);
                     setError(`Error loading product for edit: ${err.message}`);
@@ -63,15 +79,19 @@ const CreateProduct = () => {
             };
             fetchProduct();
         } else {
-            setIsEditMode(false);
-            // Reset form if not in edit mode (e.g., navigating from edit to create)
-            setNewProduct({
-                product_name: '', product_colour: '', price: '', product_description: '',
-                product_material: '', product_tags: '', product_points: '', stock_amt: '', image_urls: '',
+            // Reset form if not in edit mode
+            setProduct({
+                product_name: '',
+                product_description: '',
+                product_material: '',
+                categories: '',
+                image_urls: [],
             });
+            setPrice('');
+            setVariants(SIZES.map(size => ({ size, stock_amt: '', variant_id: null })));
             setSelectedFiles([]);
         }
-    }, [productId]);
+    }, [productId, isEditMode]);
 
     // Helper function to show temporary messages
     const showMessage = (message, isError = false) => {
@@ -85,16 +105,32 @@ const CreateProduct = () => {
         setTimeout(() => {
             setError(null);
             setSuccessMessage(null);
-        }, 3000); // Message disappears after 3 seconds
+        }, 3000);
     };
 
-    // Handle input changes for the form fields
-    const handleInputChange = (e) => {
+    // Handle input changes for product fields
+    const handleProductChange = (e) => {
         const { name, value } = e.target;
-        setNewProduct(prev => ({
+        setProduct(prev => ({
             ...prev,
             [name]: value
         }));
+    };
+
+    // Handle price change
+    const handlePriceChange = (e) => {
+        setPrice(e.target.value);
+    };
+
+    // Handle variant stock change
+    const handleVariantStockChange = (size, value) => {
+        setVariants(prevVariants => 
+            prevVariants.map(variant => 
+                variant.size === size 
+                    ? { ...variant, stock_amt: value }
+                    : variant
+            )
+        );
     };
 
     // Handle file selection for image uploads
@@ -102,7 +138,7 @@ const CreateProduct = () => {
         setSelectedFiles(Array.from(e.target.files));
     };
 
-    // Function to upload files to your Node.js backend
+    // Function to upload files to your Node.js backend (using working endpoint)
     const uploadImagesViaBackend = async (files, productName) => {
         const uploadedUrls = [];
         const failedUploads = [];
@@ -110,7 +146,6 @@ const CreateProduct = () => {
         for (const file of files) {
             const formData = new FormData();
             formData.append('file', file);
-            // Pass product_name for filename generation on backend
             formData.append('product_name', productName || `product-${Date.now()}`);
 
             try {
@@ -143,6 +178,74 @@ const CreateProduct = () => {
         return uploadedUrls;
     };
 
+    // Handle price update in edit mode
+    const handleUpdatePrice = async () => {
+        if (!price || !isEditMode) return;
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/${productId}/price`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ price: parseFloat(price) })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to update price.');
+            }
+            
+            showMessage('Price updated successfully!');
+        } catch (err) {
+            showMessage(err.message, true);
+        }
+    };
+
+    // Handle stock update for specific variant in edit mode
+    const handleUpdateStock = async (variantId, newStock) => {
+        if (!variantId || !isEditMode) return;
+        
+        const stockValue = newStock === '' ? 0 : parseInt(newStock);
+        
+        try {
+            const response = await fetch(`http://localhost:5000/api/variants/${variantId}/stock`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stock_amt: stockValue })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to update stock.');
+            }
+            
+            showMessage('Stock updated successfully!');
+        } catch (err) {
+            showMessage(err.message, true);
+        }
+    };
+
+    // Handle product deletion
+    const handleDeleteProduct = async () => {
+        if (!window.confirm("Are you sure you want to delete this product? This will also delete all its variants.")) {
+            return;
+        }
+        
+        setLoading(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/${productId}`, {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to delete product.');
+            }
+            
+            showMessage('Product deleted successfully!');
+            setTimeout(() => navigate('/products'), 1500);
+        } catch (err) {
+            showMessage(err.message, true);
+            setLoading(false);
+        }
+    };
+
     // Handle form submission for adding/updating a product
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -151,82 +254,89 @@ const CreateProduct = () => {
         setLoading(true);
 
         try {
-            let currentImageUrlsArray = newProduct.image_urls
-                ? newProduct.image_urls.split(',').map(url => url.trim()).filter(url => url)
-                : []; // Start with existing image URLs as an array
+            let currentImageUrls = [...product.image_urls];
 
-            console.log('Current images before upload:', currentImageUrlsArray);
-
-            // If new files are selected, upload them via backend
+            // If new files are selected, upload them
             if (selectedFiles.length > 0) {
                 console.log('Uploading new files:', selectedFiles.map(f => f.name));
-                const uploadedUrls = await uploadImagesViaBackend(selectedFiles, newProduct.product_name);
+                const uploadedUrls = await uploadImagesViaBackend(selectedFiles, product.product_name);
                 
                 if (uploadedUrls.length > 0) {
-                    // Concatenate new URLs with existing ones
-                    currentImageUrlsArray = [...currentImageUrlsArray, ...uploadedUrls];
-                    console.log('Combined image URLs:', currentImageUrlsArray);
-                } else {
-                    console.warn('No images were uploaded successfully');
+                    currentImageUrls = [...currentImageUrls, ...uploadedUrls];
+                    console.log('Combined image URLs:', currentImageUrls);
                 }
             }
 
-            // Prepare data to send to backend - Fixed: Use correct field names
-            const dataToSend = {
-                product_name: newProduct.product_name,
-                product_colour: newProduct.product_colour,
-                price: parseFloat(newProduct.price),
-                product_description: newProduct.product_description, // Fixed: Use correct field name
-                product_material: newProduct.product_material,
-                product_tags: newProduct.product_tags,
-                product_points: parseFloat(newProduct.product_points),
-                stock_amt: parseInt(newProduct.stock_amt, 10),
-                image_urls: currentImageUrlsArray.join(','), // Join back into a comma-separated string
+            // Prepare product data
+            const productData = {
+                product_name: product.product_name,
+                product_description: product.product_description,
+                product_material: product.product_material,
+                categories: product.categories,
+                image_urls: currentImageUrls, // Send as array
             };
 
-            console.log('Data being sent to backend:', dataToSend);
-
-            let response;
             if (isEditMode) {
-                response = await fetch(`${API_BASE_URL}/${productId}`, {
+                // Update existing product core details
+                const response = await fetch(`${API_BASE_URL}/${productId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dataToSend),
+                    body: JSON.stringify(productData),
                 });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+
+                // Update local state with new image URLs
+                setProduct(prev => ({
+                    ...prev,
+                    image_urls: currentImageUrls
+                }));
+
+                showMessage('Product updated successfully!');
+
             } else {
-                response = await fetch(API_BASE_URL, {
+                // Create new product with variants
+                const variantsToSend = variants
+                    .filter(v => v.stock_amt !== '' && !isNaN(parseInt(v.stock_amt)))
+                    .map(v => ({
+                        size: v.size,
+                        stock_amt: parseInt(v.stock_amt),
+                        price: parseFloat(price),
+                        status: 'active'
+                    }));
+
+                if (variantsToSend.length === 0) {
+                    throw new Error("Please specify stock for at least one size.");
+                }
+
+                if (!price || isNaN(parseFloat(price))) {
+                    throw new Error("Please enter a valid price.");
+                }
+
+                productData.variants = variantsToSend;
+
+                const response = await fetch(API_BASE_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dataToSend),
+                    body: JSON.stringify(productData),
                 });
-            }
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-            }
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || errorData.details || `HTTP error! status: ${response.status}`);
+                }
 
-            const responseData = await response.json();
-            console.log('Product saved successfully:', responseData);
-
-            // Update the local state with the new image URLs if successful
-            if (currentImageUrlsArray.length > 0) {
-                setNewProduct(prev => ({
-                    ...prev,
-                    image_urls: currentImageUrlsArray.join(',')
-                }));
+                showMessage('Product created successfully!');
+                setTimeout(() => navigate('/products'), 1500);
             }
 
             // Clear selected files after successful upload
             setSelectedFiles([]);
-
-            showMessage(`Product ${isEditMode ? 'updated' : 'added'} successfully!`);
-            
-            // Don't navigate immediately in edit mode, let user see the success message
-            if (!isEditMode) {
-                setTimeout(() => {
-                    navigate('/products');
-                }, 1500);
+            if (document.getElementById('image_upload')) {
+                document.getElementById('image_upload').value = "";
             }
 
         } catch (err) {
@@ -239,7 +349,7 @@ const CreateProduct = () => {
 
     return (
         <div className="create-product-container">
-            {/* Sidebar (unchanged) */}
+            {/* Sidebar */}
             <aside className="sidebar">
                 <div className="sidebar-logo">EcoThrift</div>
                 <nav className="sidebar-nav">
@@ -272,7 +382,6 @@ const CreateProduct = () => {
 
             {/* Main Content Area */}
             <div className="main-content-area">
-                {/* Page Content */}
                 <main className="page-content">
                     <h1 className="page-title">
                         {isEditMode ? 'Edit Product' : 'Create New Product'}
@@ -291,7 +400,7 @@ const CreateProduct = () => {
                         </div>
                     )}
 
-                    {loading && isEditMode ? (
+                    {(loading && isEditMode && !product.product_name) ? (
                         <p className="loading-text">Loading product data...</p>
                     ) : (
                         <form onSubmit={handleSubmit} className="product-form">
@@ -302,51 +411,43 @@ const CreateProduct = () => {
                                     type="text"
                                     id="product_name"
                                     name="product_name"
-                                    value={newProduct.product_name}
-                                    onChange={handleInputChange}
+                                    value={product.product_name}
+                                    onChange={handleProductChange}
                                     required
                                     className="form-input"
                                 />
                             </div>
-                            {/* Product Colour */}
+
+                            {/* Categories */}
                             <div className="form-group">
-                                <label htmlFor="product_colour" className="form-label">Product Colour</label>
+                                <label htmlFor="categories" className="form-label">Categories</label>
                                 <input
                                     type="text"
-                                    id="product_colour"
-                                    name="product_colour"
-                                    value={newProduct.product_colour}
-                                    onChange={handleInputChange}
+                                    id="categories"
+                                    name="categories"
+                                    value={product.categories}
+                                    onChange={handleProductChange}
                                     className="form-input"
+                                    placeholder="e.g., Tops, Casual, Summer"
                                 />
                             </div>
+
                             {/* Price */}
                             <div className="form-group">
-                                <label htmlFor="price" className="form-label">Price</label>
+                                <label htmlFor="price" className="form-label">Price (same for all sizes)</label>
                                 <input
                                     type="number"
                                     step="0.01"
                                     id="price"
                                     name="price"
-                                    value={newProduct.price}
-                                    onChange={handleInputChange}
+                                    value={price}
+                                    onChange={handlePriceChange}
+                                    onBlur={isEditMode ? handleUpdatePrice : undefined}
                                     required
                                     className="form-input"
                                 />
                             </div>
-                            {/* Stock Amount */}
-                            <div className="form-group">
-                                <label htmlFor="stock_amt" className="form-label">Stock Amount</label>
-                                <input
-                                    type="number"
-                                    id="stock_amt"
-                                    name="stock_amt"
-                                    value={newProduct.stock_amt}
-                                    onChange={handleInputChange}
-                                    required
-                                    className="form-input"
-                                />
-                            </div>
+
                             {/* Product Material */}
                             <div className="form-group">
                                 <label htmlFor="product_material" className="form-label">Product Material</label>
@@ -354,49 +455,51 @@ const CreateProduct = () => {
                                     type="text"
                                     id="product_material"
                                     name="product_material"
-                                    value={newProduct.product_material}
-                                    onChange={handleInputChange}
+                                    value={product.product_material}
+                                    onChange={handleProductChange}
                                     className="form-input"
                                 />
                             </div>
-                            {/* Product Tags */}
-                            <div className="form-group">
-                                <label htmlFor="product_tags" className="form-label">Product Tags (comma-separated)</label>
-                                <input
-                                    type="text"
-                                    id="product_tags"
-                                    name="product_tags"
-                                    value={newProduct.product_tags}
-                                    onChange={handleInputChange}
-                                    className="form-input"
-                                    placeholder="e.g., casual, summer, cotton"
-                                />
+
+                            {/* Inventory by Size */}
+                            <div className="form-group full-width">
+                                <label className="form-label" style={{fontWeight: 'bold', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.5rem', marginBottom: '1rem'}}>
+                                    Inventory by Size
+                                </label>
+                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem'}}>
+                                    {variants.map(({ variant_id, size, stock_amt }) => (
+                                        <div key={size}>
+                                            <label htmlFor={`stock_${size}`} className="form-label">
+                                                Size {size}
+                                            </label>
+                                            <input
+                                                type="number"
+                                                id={`stock_${size}`}
+                                                value={stock_amt}
+                                                onChange={(e) => handleVariantStockChange(size, e.target.value)}
+                                                onBlur={isEditMode ? () => handleUpdateStock(variant_id, stock_amt) : undefined}
+                                                placeholder="0"
+                                                min="0"
+                                                className="form-input"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                            {/* Product Points */}
-                            <div className="form-group">
-                                <label htmlFor="product_points" className="form-label">Product Points</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    id="product_points"
-                                    name="product_points"
-                                    value={newProduct.product_points}
-                                    onChange={handleInputChange}
-                                    className="form-input"
-                                />
-                            </div>
+
                             {/* Description */}
                             <div className="form-group full-width">
                                 <label htmlFor="product_description" className="form-label">Description</label>
                                 <textarea
                                     id="product_description"
-                                    name="product_description" // Fixed: Use correct field name
+                                    name="product_description"
                                     rows="3"
-                                    value={newProduct.product_description}
-                                    onChange={handleInputChange}
+                                    value={product.product_description}
+                                    onChange={handleProductChange}
                                     className="form-textarea"
                                 ></textarea>
                             </div>
+
                             {/* Image Upload */}
                             <div className="form-group full-width">
                                 <label htmlFor="image_upload" className="form-label">Upload New Images</label>
@@ -408,13 +511,14 @@ const CreateProduct = () => {
                                     onChange={handleFileChange}
                                     className="form-file-input"
                                 />
-                                {/* Display existing image URLs */}
-                                {newProduct.image_urls && newProduct.image_urls.length > 0 && (
+
+                                {/* Display existing images */}
+                                {product.image_urls && product.image_urls.length > 0 && (
                                     <div className="current-images-container">
-                                        <p className="current-images-title">Current Image URLs:</p>
+                                        <p className="current-images-title">Current Images:</p>
                                         <div className="image-preview-grid">
-                                            {newProduct.image_urls.split(',').map((url, index) => (
-                                                url.trim() && ( // Only render if URL is not empty
+                                            {product.image_urls.map((url, index) => (
+                                                url.trim() && (
                                                     <span key={index} className="image-preview-item">
                                                         <img
                                                             src={url.trim()}
@@ -429,9 +533,10 @@ const CreateProduct = () => {
                                                 )
                                             ))}
                                         </div>
-                                        <p className="image-upload-note">Note: New uploads will be appended to these URLs.</p>
+                                        <p className="image-upload-note">Note: New uploads will be added to these images.</p>
                                     </div>
                                 )}
+
                                 {/* Show selected files */}
                                 {selectedFiles.length > 0 && (
                                     <div className="selected-files-container">
@@ -456,9 +561,21 @@ const CreateProduct = () => {
                                 >
                                     {loading ? 'Saving...' : (isEditMode ? 'Update Product' : 'Add Product')}
                                 </button>
+                                
+                                {isEditMode && (
+                                    <button
+                                        type="button"
+                                        onClick={handleDeleteProduct}
+                                        className="delete-button"
+                                        disabled={loading}
+                                    >
+                                        Delete Product
+                                    </button>
+                                )}
+                                
                                 <button
                                     type="button"
-                                    onClick={() => navigate('/products')} // Go back to product list
+                                    onClick={() => navigate('/products')}
                                     className="cancel-button"
                                     disabled={loading}
                                 >
@@ -470,225 +587,212 @@ const CreateProduct = () => {
                 </main>
             </div>
 
-            {/* Custom CSS for CreateProduct */}
+            {/* CSS Styles */}
             <style jsx>{`
                 .create-product-container {
                     display: flex;
                     min-height: 100vh;
-                    background-color: #f3f4f6; /* bg-gray-100 */
+                    background-color: #f3f4f6;
                     font-family: 'Inter', sans-serif;
                     -webkit-font-smoothing: antialiased;
                     -moz-osx-font-smoothing: grayscale;
                 }
 
-                /* Sidebar Styles (reused) */
+                /* Sidebar Styles */
                 .sidebar {
-                    width: 256px; /* w-64 */
-                    background-color: #ffffff; /* bg-white */
-                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
-                    padding: 24px; /* p-6 */
+                    width: 256px;
+                    background-color: #ffffff;
+                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+                    padding: 24px;
                     display: flex;
                     flex-direction: column;
                     align-items: center;
                 }
                 .sidebar-logo {
-                    font-size: 2rem; /* text-2xl */
+                    font-size: 2rem;
                     font-weight: bold;
-                    color: #047857; /* text-green-700 */
-                    margin-bottom: 32px; /* mb-8 */
+                    color: #047857;
+                    margin-bottom: 32px;
                 }
                 .sidebar-nav {
-                    width: 100%; /* w-full */
+                    width: 100%;
                 }
                 .sidebar-nav ul {
                     list-style: none;
                     padding: 0;
                     margin: 0;
-                    /* space-y: 16px; */ /* space-y-4 */
                 }
                 .sidebar-nav li {
-                    margin-bottom: 16px; /* Equivalent to space-y-4 */
+                    margin-bottom: 16px;
                 }
                 .sidebar-link {
                     display: flex;
                     align-items: center;
-                    padding: 12px; /* p-3 */
-                    border-radius: 8px; /* rounded-lg */
-                    font-size: 1.125rem; /* text-lg */
-                    font-weight: 500; /* font-medium */
-                    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
-                    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-                    transition-duration: 200ms; /* transition-colors duration-200 */
+                    padding: 12px;
+                    border-radius: 8px;
+                    font-size: 1.125rem;
+                    font-weight: 500;
+                    transition: all 200ms;
                     text-decoration: none;
-                    color: #4b5563; /* text-gray-600 */
+                    color: #4b5563;
                 }
                 .sidebar-link:hover {
-                    background-color: #f9fafb; /* hover:bg-gray-50 */
-                    color: #111827; /* hover:text-gray-900 */
+                    background-color: #f9fafb;
+                    color: #111827;
                 }
                 .sidebar-link.active {
-                    background-color: #d1fae5; /* bg-green-100 */
-                    color: #047857; /* text-green-700 */
+                    background-color: #d1fae5;
+                    color: #047857;
                 }
                 .sidebar-icon {
-                    width: 24px; /* w-6 */
-                    height: 24px; /* h-6 */
-                    margin-right: 12px; /* mr-3 */
+                    width: 24px;
+                    height: 24px;
+                    margin-right: 12px;
                 }
 
-                /* Main Content Area Styles (reused) */
+                /* Main Content Area Styles */
                 .main-content-area {
-                    flex: 1; /* flex-1 */
+                    flex: 1;
                     display: flex;
                     flex-direction: column;
                 }
                 .page-content {
-                    flex: 1; /* flex-1 */
-                    padding: 32px; /* p-8 */
+                    flex: 1;
+                    padding: 32px;
                 }
                 .page-title {
-                    font-size: 2.25rem; /* text-4xl */
-                    font-weight: 800; /* font-extrabold */
-                    color: #1f2937; /* text-gray-800 */
-                    margin-bottom: 24px; /* mb-6 */
+                    font-size: 2.25rem;
+                    font-weight: 800;
+                    color: #1f2937;
+                    margin-bottom: 24px;
                 }
 
-                /* Message Styles (reused) */
-                .error-message {
-                    background-color: #fee2e2; /* bg-red-100 */
-                    border: 1px solid #f87171; /* border-red-400 */
-                    color: #b91c1c; /* text-red-700 */
-                    padding: 12px 16px; /* px-4 py-3 */
-                    border-radius: 6px; /* rounded */
+                /* Message Styles */
+                .error-message, .success-message {
+                    padding: 12px 16px;
+                    border-radius: 6px;
                     position: relative;
-                    margin-bottom: 16px; /* mb-4 */
+                    margin-bottom: 16px;
                 }
-                .error-message strong {
-                    font-weight: bold;
+                .error-message {
+                    background-color: #fee2e2;
+                    border: 1px solid #f87171;
+                    color: #b91c1c;
                 }
                 .success-message {
-                    background-color: #d1fae5; /* bg-green-100 */
-                    border: 1px solid #34d399; /* border-green-400 */
-                    color: #065f46; /* text-green-700 */
-                    padding: 12px 16px; /* px-4 py-3 */
-                    border-radius: 6px; /* rounded */
-                    position: relative;
-                    margin-bottom: 16px; /* mb-4 */
-                }
-                .success-message strong {
-                    font-weight: bold;
+                    background-color: #d1fae5;
+                    border: 1px solid #34d399;
+                    color: #065f46;
                 }
                 .loading-text {
                     text-align: center;
-                    color: #4b5563; /* text-gray-600 */
-                    font-size: 1.25rem; /* text-xl */
-                    margin-top: 40px; /* mt-10 */
+                    color: #4b5563;
+                    font-size: 1.25rem;
+                    margin-top: 40px;
                 }
 
                 /* Product Form Styles */
                 .product-form {
                     display: grid;
-                    grid-template-columns: repeat(1, 1fr); /* Default to 1 column */
-                    gap: 24px; /* gap-6 */
-                    margin-bottom: 48px; /* mb-12 */
-                    padding: 24px; /* p-6 */
-                    border: 1px solid #e5e7eb; /* border-gray-200 */
-                    border-radius: 8px; /* rounded-lg */
-                    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* shadow-sm */
-                    background-color: #ffffff; /* bg-white */
-                    max-width: 900px; /* Limit width for better readability */
+                    grid-template-columns: 1fr;
+                    gap: 24px;
+                    margin-bottom: 48px;
+                    padding: 24px;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 8px;
+                    box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1);
+                    background-color: #ffffff;
+                    max-width: 900px;
                     margin-left: auto;
                     margin-right: auto;
                 }
-                @media (min-width: 768px) { /* md:grid-cols-2 */
+                @media (min-width: 768px) {
                     .product-form {
-                        grid-template-columns: repeat(2, 1fr);
+                        grid-template-columns: 1fr 1fr;
                     }
                 }
 
                 .form-group {
-                    margin-bottom: 0; /* Handled by grid gap */
+                    margin-bottom: 0;
                 }
                 .form-group.full-width {
-                    grid-column: 1 / -1; /* spans full width in grid */
+                    grid-column: 1 / -1;
                 }
                 .form-label {
                     display: block;
-                    font-size: 0.875rem; /* text-sm */
-                    font-weight: 500; /* font-medium */
-                    color: #374151; /* text-gray-700 */
-                    margin-bottom: 4px; /* mb-1 */
+                    font-size: 0.875rem;
+                    font-weight: 500;
+                    color: #374151;
+                    margin-bottom: 4px;
                 }
-                .form-input,
-                .form-textarea {
+                .form-input, .form-textarea {
                     display: block;
                     width: 100%;
-                    padding: 10px 16px; /* px-4 py-2 */
-                    border: 1px solid #d1d5db; /* border-gray-300 */
-                    border-radius: 6px; /* rounded-md */
-                    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
-                    font-size: 0.875rem; /* sm:text-sm */
-                    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+                    padding: 10px 16px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+                    font-size: 0.875rem;
+                    transition: all 0.15s ease-in-out;
                 }
-                .form-input:focus,
-                .form-textarea:focus {
+                .form-input:focus, .form-textarea:focus {
                     outline: none;
-                    border-color: #3b82f6; /* focus:border-blue-500 */
-                    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5); /* focus:ring-blue-500 */
+                    border-color: #3b82f6;
+                    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
                 }
                 .form-textarea {
-                    resize: vertical; /* Allow vertical resize */
+                    resize: vertical;
                 }
                 .form-file-input {
                     display: block;
                     width: 100%;
-                    margin-top: 4px; /* mt-1 */
-                    font-size: 0.875rem; /* text-sm */
-                    color: #4b5563; /* text-gray-500 */
+                    margin-top: 4px;
+                    font-size: 0.875rem;
+                    color: #4b5563;
                 }
                 .form-file-input::file-selector-button {
-                    margin-right: 16px; /* file:mr-4 */
-                    padding: 8px 16px; /* file:py-2 file:px-4 */
-                    border-radius: 6px; /* file:rounded-md */
-                    border: 0; /* file:border-0 */
-                    font-size: 0.875rem; /* file:text-sm */
-                    font-weight: 600; /* file:font-semibold */
-                    background-color: #eff6ff; /* file:bg-blue-50 */
-                    color: #1d4ed8; /* file:text-blue-700 */
+                    margin-right: 16px;
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    border: 0;
+                    font-size: 0.875rem;
+                    font-weight: 600;
+                    background-color: #eff6ff;
+                    color: #1d4ed8;
                     cursor: pointer;
                     transition: background-color 0.15s ease-in-out;
                 }
                 .form-file-input::file-selector-button:hover {
-                    background-color: #dbeafe; /* hover:file:bg-blue-100 */
+                    background-color: #dbeafe;
                 }
 
                 .current-images-container {
-                    margin-top: 8px; /* mt-2 */
-                    font-size: 0.875rem; /* text-sm */
-                    color: #4b5563; /* text-gray-600 */
+                    margin-top: 8px;
+                    font-size: 0.875rem;
+                    color: #4b5563;
                 }
                 .current-images-title {
-                    margin-bottom: 4px; /* mb-1 */
+                    margin-bottom: 4px;
                 }
                 .image-preview-grid {
                     display: flex;
                     flex-wrap: wrap;
-                    gap: 8px; /* gap-2 */
+                    gap: 8px;
                 }
                 .image-preview-item {
                     display: inline-block;
                 }
                 .image-preview {
-                    width: 80px; /* w-20 */
-                    height: 80px; /* h-20 */
+                    width: 80px;
+                    height: 80px;
                     object-fit: cover;
-                    border-radius: 6px; /* rounded-md */
-                    border: 1px solid #d1d5db; /* border border-gray-300 */
+                    border-radius: 6px;
+                    border: 1px solid #d1d5db;
                 }
                 .image-upload-note {
-                    margin-top: 8px; /* mt-2 */
-                    font-size: 0.75rem; /* text-xs */
-                    color: #6b7280; /* text-gray-500 */
+                    margin-top: 8px;
+                    font-size: 0.75rem;
+                    color: #6b7280;
                 }
 
                 .selected-files-container {
@@ -711,47 +815,49 @@ const CreateProduct = () => {
                 }
 
                 .form-actions {
-                    grid-column: 1 / -1; /* col-span-full */
+                    grid-column: 1 / -1;
                     display: flex;
                     justify-content: flex-end;
-                    gap: 16px; /* space-x-4 */
-                    margin-top: 16px; /* mt-4 */
+                    gap: 16px;
+                    margin-top: 16px;
                 }
-                .submit-button,
-                .cancel-button {
+                .submit-button, .cancel-button, .delete-button {
                     display: inline-flex;
                     justify-content: center;
-                    padding: 8px 24px; /* py-2 px-6 */
-                    border: 1px solid transparent; /* border border-transparent */
-                    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
-                    font-size: 0.875rem; /* text-sm */
-                    font-weight: 500; /* font-medium */
-                    border-radius: 6px; /* rounded-md */
+                    padding: 8px 24px;
+                    border: 1px solid transparent;
+                    box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+                    font-size: 0.875rem;
+                    font-weight: 500;
+                    border-radius: 6px;
                     transition: all 0.15s ease-in-out;
                     cursor: pointer;
                 }
                 .submit-button {
-                    background-color: #2563eb; /* bg-blue-600 */
-                    color: #ffffff; /* text-white */
+                    background-color: #2563eb;
+                    color: #ffffff;
                 }
                 .submit-button:hover {
-                    background-color: #1d4ed8; /* hover:bg-blue-700 */
+                    background-color: #1d4ed8;
                 }
-                .submit-button:disabled {
+                .submit-button:disabled, .cancel-button:disabled, .delete-button:disabled {
                     opacity: 0.6;
                     cursor: not-allowed;
                 }
                 .cancel-button {
-                    background-color: #ffffff; /* bg-white */
-                    color: #4b5563; /* text-gray-700 */
-                    border-color: #d1d5db; /* border-gray-300 */
+                    background-color: #ffffff;
+                    color: #4b5563;
+                    border-color: #d1d5db;
                 }
                 .cancel-button:hover {
-                    background-color: #f9fafb; /* hover:bg-gray-50 */
+                    background-color: #f9fafb;
                 }
-                .cancel-button:disabled {
-                    opacity: 0.6;
-                    cursor: not-allowed;
+                .delete-button {
+                    background-color: #ef4444;
+                    color: #ffffff;
+                }
+                .delete-button:hover {
+                    background-color: #dc2626;
                 }
             `}</style>
         </div>
