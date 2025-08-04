@@ -85,13 +85,33 @@ const ProductDetailsPage = () => {
         }
     };
     
-    const handleAddToCart = () => {
-        if (!selectedVariant) {
-            alert('Please select a size.');
-            return;
+const handleAddToCart = async () => {
+    if (!selectedVariant) {
+        alert('Please select a size.');
+        return;
+    }
+    if (!userId) {
+        alert('Please log in to add items to your cart.');
+        return;
+    }
+
+    try {
+        const response = await fetch('http://localhost:5000/api/shop/cart', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, variantId: selectedVariant.id }),
+        });
+
+        if (response.ok) {
+            alert(`${product.product_name} (Size: ${selectedVariant.size}) has been added to your cart!`);
+        } else {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to add item to cart.');
         }
-        alert(`${product.product_name} (Size: ${selectedVariant.size}) added to cart! (Placeholder)`);
-    };
+    } catch (err) {
+        alert(err.message);
+    }
+};
     
     const toggleAccordion = (index) => {
         setActiveAccordion(activeAccordion === index ? null : index);

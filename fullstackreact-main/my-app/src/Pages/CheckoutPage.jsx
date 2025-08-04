@@ -6,32 +6,14 @@ const CheckoutPage = () => {
     const location = useLocation();
     const navigate = useNavigate();
     
-    // Get the items passed from the CartPage.
-    // The '|| []' provides a fallback to prevent errors if the page is accessed directly.
     const itemsToCheckout = location.state?.items || [];
 
-    // State for delivery and payment options
-    const [deliveryMethod, setDeliveryMethod] = useState('Collection'); // 'Collection' or 'Doorstep'
-    const [paymentMethod, setPaymentMethod] = useState('CreditCard'); // 'CreditCard' or 'PayPal'
+    const [deliveryMethod, setDeliveryMethod] = useState('Collection');
+    const [paymentMethod, setPaymentMethod] = useState('CreditCard');
     const [isProcessing, setIsProcessing] = useState(false);
 
     const SHIPPING_FEE = 5.00;
 
-    // useMemo will recalculate these values only when itemsToCheckout changes.
-    // This is more efficient than recalculating on every render.
-    /*
-    const subtotal = useMemo(() => {
-        return itemsToCheckout.reduce((total, item) => total + parseFloat(item.price), 0);
-    }, [itemsToCheckout]);
-
-    const shippingFee = useMemo(() => {
-        return deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0;
-    }, [deliveryMethod]);
-
-    const totalPrice = useMemo(() => {
-        return (subtotal + shippingFee).toFixed(2);
-    }, [subtotal, shippingFee]);
-*/
     const subtotal = useMemo(() => itemsToCheckout.reduce((total, item) => total + parseFloat(item.price), 0), [itemsToCheckout]);
     const shippingFee = useMemo(() => deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0, [deliveryMethod]);
     const totalPrice = useMemo(() => (subtotal + shippingFee).toFixed(2), [subtotal, shippingFee]);
@@ -44,6 +26,8 @@ const CheckoutPage = () => {
         }
         setIsProcessing(true);
         try {
+            // The itemsToCheckout array now includes the 'type' field,
+            // which the updated backend endpoint requires.
             await axios.post('http://localhost:5000/api/orders', {
                 userId,
                 items: itemsToCheckout,
@@ -52,10 +36,12 @@ const CheckoutPage = () => {
                 shippingFee
             });
             alert("Payment successful! Your order has been placed.");
-            navigate('/purchases'); // Redirect to the new My Purchases page
+            navigate('/purchases'); // This will now work correctly
         } catch (err) {
             console.error("Error placing order:", err);
-            alert("Failed to place order. Please try again.");
+            // Display the specific error from the backend if available
+            const errorMessage = err.response?.data?.error || "Failed to place order. Please try again.";
+            alert(errorMessage);
         } finally {
             setIsProcessing(false);
         }
@@ -74,14 +60,14 @@ const CheckoutPage = () => {
 
     return (
         <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px', display: 'flex', gap: '40px' }}>
-            {/* Left Side: Order Summary */}
             <div style={{ flex: 2 }}>
                 <h2>Order Summary</h2>
                 {itemsToCheckout.map(item => (
                     <div key={item.cart_item_id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #eee', padding: '10px 0' }}>
-                        <img src={(item.image_url && item.image_url[0]) || `https://placehold.co/80x80`} alt={item.title} style={{ width: '80px', height: '80px', objectFit: 'cover', marginRight: '15px' }} />
+                        {/* UPDATED: Uses the unified 'imageUrl' and 'name' fields */}
+                        <img src={item.imageUrl} alt={item.name} style={{ width: '80px', height: '80px', objectFit: 'cover', marginRight: '15px' }} />
                         <div style={{ flexGrow: 1 }}>
-                            <p style={{ margin: 0, fontWeight: 'bold' }}>{item.title}</p>
+                            <p style={{ margin: 0, fontWeight: 'bold' }}>{item.name}</p>
                             <p style={{ margin: '4px 0', color: '#555' }}>Size: {item.size}</p>
                         </div>
                         <p style={{ margin: 0 }}>${parseFloat(item.price).toFixed(2)}</p>

@@ -976,12 +976,12 @@ app.post('/api/orders', async (req, res) => {
         return res.status(400).json({ error: 'Missing required order information.' });
     }
 
-    const client = await db.connect(); // Use a client for transaction
+    const client = await db.connect();
 
     try {
-        await client.query('BEGIN'); // Start transaction
+        await client.query('BEGIN'); // START THE TRANSACTION
 
-        // 1. Create a single entry in the 'orders' table
+        // 1. Create a single entry in the 'orders' table (this logic is mostly the same)
         const orderQuery = `
             INSERT INTO orders (buyer_id, total_price, delivery_method, shipping_fee, user_order_id)
             VALUES ($1, $2, $3, $4, (SELECT COUNT(*) FROM orders WHERE buyer_id = $1) + 1)
@@ -990,40 +990,52 @@ app.post('/api/orders', async (req, res) => {
         const orderResult = await client.query(orderQuery, [userId, totalPrice, deliveryMethod, shippingFee]);
         const newOrderId = orderResult.rows[0].id;
 
-        // 2. Create multiple entries in 'order_items'
-        const productIds = items.map(item => item.id);
-        const cartItemIds = items.map(item => item.cart_item_id);
-
+        // 2. Loop through all items and process them based on their type
         for (const item of items) {
+            // Insert into the new, flexible order_items table
             const orderItemQuery = `
-                INSERT INTO order_items (order_id, product_id, price_at_purchase)
-                VALUES ($1, $2, $3);
+                INSERT INTO order_items (order_id, purchased_item_id, item_type, price_at_purchase)
+                VALUES ($1, $2, $3, $4);
             `;
-            await client.query(orderItemQuery, [newOrderId, item.id, item.price]);
+            await client.query(orderItemQuery, [newOrderId, item.id, item.type, item.price]);
+
+            // 3. Update inventory based on the item type
+            if (item.type === 'marketplace') {
+                // For marketplace items, mark as 'sold'
+                const updateMarketplaceQuery = `
+                    UPDATE marketplaceproducts SET status = 'sold' WHERE id = $1 AND status = 'available';
+                `;
+                const result = await client.query(updateMarketplaceQuery, [item.id]);
+                if (result.rowCount === 0) throw new Error(`Marketplace item "${item.name}" is no longer available.`);
+                
+                // Delete from the marketplace cart
+                await client.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id = $2', [userId, item.id]);
+
+            } else if (item.type === 'shop') {
+                // For shop items, decrement the stock
+                const updateShopQuery = `
+                    UPDATE product_variants SET stock_amt = stock_amt - 1 WHERE id = $1 AND stock_amt > 0;
+                `;
+                const result = await client.query(updateShopQuery, [item.id]); // item.id is the variant_id here
+                if (result.rowCount === 0) throw new Error(`Shop item "${item.name} (${item.size})" is out of stock.`);
+
+                // Delete from the shop cart
+                await client.query('DELETE FROM shop_cart_items WHERE user_id = $1 AND variant_id = $2', [userId, item.id]);
+            }
         }
 
-        // 3. Update the status of the purchased products to 'sold'
-        const updateProductsQuery = `
-            UPDATE marketplaceproducts SET status = 'sold' WHERE id = ANY($1::int[]);
-        `;
-        await client.query(updateProductsQuery, [productIds]);
-
-        // 4. Delete the items from the user's cart
-        const deleteCartItemsQuery = `
-            DELETE FROM cart_items WHERE id = ANY($1::int[]);
-        `;
-        await client.query(deleteCartItemsQuery, [cartItemIds]);
-
-        await client.query('COMMIT'); // Commit transaction
-        simulateDelivery(newOrderId);
+        await client.query('COMMIT'); // COMMIT THE TRANSACTION
+        
+        simulateDelivery(newOrderId); // This function from your teammate's code can remain
         res.status(201).json({ message: 'Order created successfully!', orderId: newOrderId });
 
     } catch (err) {
-        await client.query('ROLLBACK'); // Rollback on error
-        console.error('Error creating order:', err.message);
-        res.status(500).json({ error: 'Server error while creating order.' });
+        await client.query('ROLLBACK'); // If anything fails, undo all changes
+        console.error('Error creating unified order:', err.message);
+        // Send a more user-friendly error message
+        res.status(500).json({ error: err.message || 'Server error while creating order.' });
     } finally {
-        client.release(); // Release the client back to the pool
+        client.release();
     }
 });
 
@@ -1036,17 +1048,58 @@ app.post('/api/orders', async (req, res) => {
 app.get('/api/orders/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
-        const query = `
-            SELECT o.*, 
-                   (SELECT json_agg(p.image_url[1]) FROM order_items oi JOIN marketplaceproducts p ON oi.product_id = p.id WHERE oi.order_id = o.id) as product_images
-            FROM orders o
-            WHERE o.buyer_id = $1
-            ORDER BY o.ordered_at DESC;
+        // This query fetches the basic order details. We will fetch the images separately.
+        const ordersQuery = `
+            SELECT id, user_order_id, total_price, ordered_at, delivered_at, shipped_at, review_completed_at
+            FROM orders
+            WHERE buyer_id = $1
+            ORDER BY ordered_at DESC;
         `;
-        const { rows } = await db.query(query, [userId]);
-        res.status(200).json(rows);
+        const { rows: orders } = await db.query(ordersQuery, [userId]);
+
+        // Now, for each order, fetch the corresponding product images
+        for (const order of orders) {
+            const itemsQuery = `SELECT purchased_item_id, item_type FROM order_items WHERE order_id = $1`;
+            const { rows: items } = await db.query(itemsQuery, [order.id]);
+            
+            const images = [];
+            for (const item of items) {
+                let imageResult;
+                if (item.item_type === 'marketplace') {
+                    imageResult = await db.query(
+                        'SELECT image_url FROM marketplaceproducts WHERE id = $1', 
+                        [item.purchased_item_id]
+                    );
+                    // Marketplace image_url is already an array
+                    if (imageResult.rows.length > 0 && imageResult.rows[0].image_url) {
+                        images.push(imageResult.rows[0].image_url[0]);
+                    }
+                } else if (item.item_type === 'shop') {
+                    imageResult = await db.query(
+                        `SELECT p.image_urls
+                         FROM products p
+                         JOIN product_variants pv ON p.id = pv.product_id
+                         WHERE pv.id = $1`,
+                        [item.purchased_item_id]
+                    );
+                    // Shop image_urls might be a string or array, so we handle both
+                    if (imageResult.rows.length > 0 && imageResult.rows[0].image_urls) {
+                        const urls = imageResult.rows[0].image_urls;
+                        if (Array.isArray(urls) && urls.length > 0) {
+                            images.push(urls[0]);
+                        } else if (typeof urls === 'string') {
+                            images.push(urls.split(',')[0]);
+                        }
+                    }
+                }
+            }
+            // Attach the collected images to the order object
+            order.product_images = images;
+        }
+
+        res.status(200).json(orders);
     } catch (err) {
-        console.error('Error fetching orders:', err.message);
+        console.error('Error fetching unified orders:', err.message);
         res.status(500).json({ error: 'Server error while fetching orders.' });
     }
 });
@@ -1060,7 +1113,7 @@ app.get('/api/orders/:userId', async (req, res) => {
 app.get('/api/orders/details/:orderId', async (req, res) => {
     const { orderId } = req.params;
     try {
-        // Get order summary
+        // Get order summary (this part is mostly the same)
         const orderQuery = `SELECT *, user_order_id FROM orders WHERE id = $1;`;
         const orderResult = await db.query(orderQuery, [orderId]);
         if (orderResult.rows.length === 0) {
@@ -1069,19 +1122,43 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
         const orderSummary = orderResult.rows[0];
 
         // Get line items for the order
-        const itemsQuery = `
-            SELECT p.title, p.size, p.image_url, p.seller_id, oi.price_at_purchase
-            FROM order_items oi
-            JOIN marketplaceproducts p ON oi.product_id = p.id
-            WHERE oi.order_id = $1;
-        `;
+        const itemsQuery = `SELECT * FROM order_items WHERE order_id = $1;`;
         const itemsResult = await db.query(itemsQuery, [orderId]);
-        const lineItems = itemsResult.rows;
+        
+        const lineItems = [];
+        for (const item of itemsResult.rows) {
+            if (item.item_type === 'marketplace') {
+                const productRes = await db.query(
+                    'SELECT title, size, image_url, seller_id FROM marketplaceproducts WHERE id = $1', 
+                    [item.purchased_item_id]
+                );
+                if (productRes.rows.length > 0) {
+                    lineItems.push({ ...item, ...productRes.rows[0], name: productRes.rows[0].title });
+                }
+            } else if (item.item_type === 'shop') {
+                const productRes = await db.query(
+                    `SELECT p.product_name, p.image_urls, pv.size 
+                     FROM products p
+                     JOIN product_variants pv ON p.id = pv.product_id
+                     WHERE pv.id = $1`,
+                    [item.purchased_item_id]
+                );
+                if (productRes.rows.length > 0) {
+                    const details = productRes.rows[0];
+                    lineItems.push({
+                        ...item,
+                        ...details,
+                        name: details.product_name,
+                        image_url: details.image_urls // Ensure consistent naming
+                    });
+                }
+            }
+        }
 
         res.status(200).json({ summary: orderSummary, items: lineItems });
 
     } catch (err) {
-        console.error('Error fetching order details:', err.message);
+        console.error('Error fetching unified order details:', err.message);
         res.status(500).json({ error: 'Server error while fetching order details.' });
     }
 });
@@ -1646,6 +1723,89 @@ app.delete('/api/wishlist', async (req, res) => {
     } catch (err) {
         console.error('Error removing from wishlist:', err.message);
         res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.put('/api/wishlist/note', async (req, res) => {
+    const { userId, productId, note } = req.body;
+    if (!userId || productId === undefined) {
+        return res.status(400).json({ error: 'User ID and Product ID are required.' });
+    }
+
+    try {
+        const query = `
+            UPDATE wishlist_items 
+            SET note = $1 
+            WHERE user_id = $2 AND product_id = $3
+            RETURNING *;
+        `;
+        const { rows } = await db.query(query, [note || null, userId, productId]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Item not found in wishlist.' });
+        }
+        res.status(200).json(rows[0]);
+    } catch (err) {
+        console.error('Error updating wishlist note:', err.message);
+        res.status(500).json({ error: 'Server error while updating note.' });
+    }
+});
+
+app.get('/api/shop/cart/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const query = `
+            SELECT 
+                sci.quantity,
+                pv.id AS variant_id,
+                pv.size,
+                pv.price,
+                p.id AS product_id,
+                p.product_name,
+                p.image_urls
+            FROM shop_cart_items sci
+            JOIN product_variants pv ON sci.variant_id = pv.id
+            JOIN products p ON pv.product_id = p.id
+            WHERE sci.user_id = $1;
+        `;
+        const { rows } = await db.query(query, [userId]);
+        res.status(200).json(rows);
+    } catch (err) {
+        console.error('Error fetching shop cart:', err.message);
+        res.status(500).json({ error: 'Server error while fetching shop cart.' });
+    }
+});
+
+app.post('/api/shop/cart', async (req, res) => {
+    const { userId, variantId, quantity = 1 } = req.body;
+    if (!userId || !variantId) {
+        return res.status(400).json({ error: 'User ID and Variant ID are required.' });
+    }
+    try {
+        const query = `
+            INSERT INTO shop_cart_items (user_id, variant_id, quantity)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, variant_id)
+            DO UPDATE SET quantity = shop_cart_items.quantity + $3
+            RETURNING *;
+        `;
+        const { rows } = await db.query(query, [userId, variantId, quantity]);
+        res.status(201).json(rows[0]);
+    } catch (err) {
+        console.error('Error adding to shop cart:', err.message);
+        res.status(500).json({ error: 'Server error while adding to shop cart.' });
+    }
+});
+
+app.delete('/api/shop/cart/:userId/:variantId', async (req, res) => {
+    const { userId, variantId } = req.params;
+    try {
+        const query = `DELETE FROM shop_cart_items WHERE user_id = $1 AND variant_id = $2;`;
+        await db.query(query, [userId, variantId]);
+        res.status(200).json({ message: 'Item removed from shop cart.' });
+    } catch (err) {
+        console.error('Error removing from shop cart:', err.message);
+        res.status(500).json({ error: 'Server error while removing from shop cart.' });
     }
 });
 
