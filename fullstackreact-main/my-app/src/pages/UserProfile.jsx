@@ -87,7 +87,7 @@ const UserProfile = () => {
       {showMixModal && (
         <MixAndMatchModal
           onClose={() => setShowMixModal(false)}
-          onSubmit={handleMixSubmit}
+         
         />
       )}
     </div>

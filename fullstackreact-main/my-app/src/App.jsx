@@ -12,6 +12,7 @@ import CartImg from './assets/cart-icon.png';
 import UserProfile     from './pages/UserProfile';
 import EditProfile     from './pages/EditProfile';
 import ChangePassword  from './pages/ChangePassword';
+import MixAndMatch from './Pages/mixandmatch';
 // Team
 import ViewUserProfile   from './pages/ViewUserProfile';
 import MarketplacePage   from './pages/MarketplacePage';
@@ -167,6 +168,7 @@ const App = () => {
         <Route path="/profile"         element={<UserProfile />} />
         <Route path="/editprofile"     element={<EditProfile />} />
         <Route path="/changepassword"  element={<ChangePassword />} />
+       <Route path="/mixandmatch"        element={<MixAndMatch />} />
 
         {/* Team */}
         <Route path="/marketplace"     element={<MarketplacePage />} />

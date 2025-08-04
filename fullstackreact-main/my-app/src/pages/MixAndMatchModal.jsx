@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const overlayStyle = {
   position: 'fixed',
@@ -18,27 +19,29 @@ const modalStyle = {
   position: 'relative'
 };
 
-// Example dropdown data, can come from parent props or database later
 const tagsOptions = ['Casual', 'Formal', 'Sport', 'Work', 'Party'];
 const colorOptions = ['Red', 'Blue', 'Black', 'White', 'Green', 'Yellow', 'Brown'];
 
-export default function MixAndMatchModal({ onClose, onSubmit, loading = false }) {
+export default function MixAndMatchModal({ onClose }) {
   const [category, setCategory] = useState('');
   const [tags, setTags] = useState('');
   const [color, setColor] = useState('');
   const [owned, setOwned] = useState('owned');
   const [tagsDropdown, setTagsDropdown] = useState(false);
   const [colorDropdown, setColorDropdown] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // Close modal on ESC
   const modalRef = useRef();
+  const navigate = useNavigate();
+
+  // ESC to close modal
   useEffect(() => {
     const escListener = e => { if (e.key === "Escape") onClose(); };
     window.addEventListener('keydown', escListener);
     return () => window.removeEventListener('keydown', escListener);
   }, [onClose]);
 
-  // Close dropdowns if click outside
+  // Click outside to close dropdowns
   useEffect(() => {
     const listener = e => {
       if (modalRef.current && !modalRef.current.contains(e.target)) {
@@ -50,16 +53,42 @@ export default function MixAndMatchModal({ onClose, onSubmit, loading = false })
     return () => window.removeEventListener('mousedown', listener);
   }, []);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSubmit && onSubmit({ category, tags, color, owned: owned === 'owned' });
-    onClose(); // (Optional) close after submit
+    setLoading(true);
+
+    try {
+      const res = await fetch('http://localhost:5000/api/mixmatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category,
+          tags: tags ? tags.split(',').map(t => t.trim()) : [],
+          color,
+          owned: owned === 'owned'
+        })
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        alert(data.error);
+        setLoading(false);
+        return;
+      }
+
+      // Redirect to results page with AI’s outfit
+      console.log("navigate???")
+      navigate('/mixandmatch', { state: { outfit: data.outfit, reasoning: data.reasoning } });
+      onClose && onClose();
+    } catch (err) {
+      alert('Error generating mix & match');
+    }
+    setLoading(false);
   };
 
   return (
     <div style={overlayStyle}>
       <div ref={modalRef} style={modalStyle}>
-        {/* Back button */}
         <button
           onClick={onClose}
           style={{
@@ -149,7 +178,6 @@ export default function MixAndMatchModal({ onClose, onSubmit, loading = false })
             )}
           </div>
 
-          {/* Owned / Unowned Radio */}
           <div style={{ display: 'flex', gap: 20, marginBottom: 26, justifyContent: 'center' }}>
             <label style={{
               border: '2px solid #222', borderRadius: 12, padding: '8px 36px',

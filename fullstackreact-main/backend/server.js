@@ -554,42 +554,102 @@ app.delete('/api/creditcard', async (req, res) => {
 
 
 app.post('/api/mixmatch', async (req, res) => {
-  const { username, category, tags, color, owned } = req.body;
+  const { user_id, category, tags, color, owned } = req.body;
 
   try {
-    // 1. Query database for matching clothes
-    // Example query, adapt as needed:
-    let query = 'SELECT * FROM clothes WHERE 1=1';
+    let query = `
+      SELECT mp.*, ct.category AS tag_category, ct.tags, ct.color AS tag_color
+      FROM marketplaceproducts mp
+      JOIN clothestag ct ON mp.id = ct.product_id
+    `;
+    let conditions = [];
     let params = [];
-    if (category) { query += ' AND category = $' + (params.length+1); params.push(category); }
-    if (color) { query += ' AND color = $' + (params.length+1); params.push(color); }
-    // Add owned/unowned logic as needed
-    // For tags, use LIKE or an array column depending on your schema
 
-    const result = await db.query(query, params);
+    // Optional: Owned/unowned filter
+    if (owned === true && user_id) {
+      query += " JOIN userowned uo ON mp.id = uo.product_id";
+      conditions.push("uo.user_id = $" + (params.length + 1));
+      params.push(user_id);
+    } else if (owned === false && user_id) {
+      query += " LEFT JOIN userowned uo ON mp.id = uo.product_id AND uo.user_id = $" + (params.length + 1);
+      conditions.push("uo.user_id IS NULL");
+      params.push(user_id);
+    }
 
-    // 2. Prepare prompt for ChatGPT
-    const prompt = `I have the following clothes in my inventory:${result.rows.map(row => `ID:${row.id}, Category:${row.category}, Color:${row.color}, Tags:${row.tags}, Owned:${row.owned ? "Yes" : "No"}`).join('\n')}Please recommend a mix and match outfit. Output format: "Shirt:<id>,Pants:<id>,Shoes:<id>"Only select items that match these filters:- Category: ${category || "Any"}- Color: ${color || "Any"}- Tags: ${tags || "Any"}- Owned: ${owned || "Any"}Respond ONLY with the output format.`;
+    if (conditions.length) {
+      query += " WHERE " + conditions.join(" AND ");
+    }
+    query += " ORDER BY mp.created_at DESC LIMIT 30";
 
-    // 3. Call ChatGPT API (Note: OpenAI not imported - needs configuration)
-    // const completion = await openai.createChatCompletion({
-    //   model: "gpt-3.5-turbo",
-    //   messages: [{role: "user", content: prompt}],
-    //   temperature: 1.1,
-    //   max_tokens: 60,
-    // });
+    // DEBUG: print query & params
+    console.log('MIXMATCH QUERY:', query, params);
 
-    // const reply = completion.data.choices[0].message.content;
-    // res.json({ result: reply });
+    const { rows: products } = await db.query(query, params);
+    if (!products.length) return res.json({ error: "No matching clothes found." });
 
-    // Placeholder response since OpenAI is not configured
-    res.json({ result: "Mix and match feature requires OpenAI API configuration." });
+    // Prepare user preferences as text
+    let preferenceText = "User is looking for: ";
+    if (category) preferenceText += `category: ${category}; `;
+    if (color) preferenceText += `color: ${color}; `;
+    if (tags && tags.length > 0) preferenceText += `tags: ${tags.join(', ')}; `;
+    if (owned === true) preferenceText += "items the user owns; ";
+    if (owned === false) preferenceText += "items the user does NOT own; ";
+
+    // Format for AI: include all items, let OpenAI decide
+    const inventory = products.map(p =>
+      `ID:${p.id},Category:${p.tag_category},Color:${p.tag_color},Tags:${(p.tags || []).join(',')},Title:${p.title || ''}`
+    ).join('\n');
+
+    // Construct prompt
+    const prompt =
+      `${preferenceText}\n` +
+      `Here is the available clothing inventory:\n${inventory}\n` +
+      `Please recommend an outfit with at least one top and one bottom (e.g., Shirt + Pants) that best fits the user's preferences (even if not an exact match, just the closest possible). ` +
+      `Return your answer as JSON (do not include markdown/code blocks):\n` +
+      `{"top":<id>,"bottom":<id>,"reasoning":"short reasoning for your pick"}\n` +
+      `If no good match is possible, pick the next best and explain why.`;
+
+    // Call OpenAI
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: "You are a helpful fashion AI." },
+        { role: "user", content: prompt }
+      ],
+      max_tokens: 220,
+      temperature: 0.9, // Increase for more creativity/flexibility!
+    });
+
+    let text = completion.choices[0].message.content.trim();
+
+    // Remove markdown code blocks (in case AI adds them)
+    if (text.startsWith('```')) {
+      text = text.replace(/^```[a-z]*\n?/i, '').replace(/```$/, '').trim();
+    }
+
+    let ai;
+    try {
+      ai = JSON.parse(text);
+    } catch {
+      return res.status(500).json({ error: "Invalid AI response", ai_response: text });
+    }
+
+    // Find the selected products
+    const top = products.find(p => p.id === Number(ai.top));
+    const bottom = products.find(p => p.id === Number(ai.bottom));
+
+    res.json({
+      outfit: { top, bottom },
+      reasoning: ai.reasoning || ""
+    });
 
   } catch (err) {
     console.error(err);
     res.status(500).send('Error generating mix and match');
   }
 });
+
+
 
 app.post('/api/suspend_user', async (req, res) => {
     const { user_id, suspend_until, reason, staff_id } = req.body;
