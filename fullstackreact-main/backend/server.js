@@ -4,14 +4,16 @@ const cors = require('cors');
 const { Client } = require('pg'); // [OLD CODE]
 const { Pool } = require('pg');
 const multer = require('multer');
-const path = require('path');
 const app = express();
 const nodemailer = require('nodemailer');
 const { WebSocketServer } = require('ws');
+const fs = require('fs');
+const path = require('path');
+
 app.use(cors());
 app.use(express.json());
 const { OpenAI } = require('openai');
-const openai = new OpenAI({ apiKey: "replace it" });
+const openai = new OpenAI({ apiKey: "" });
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -21,11 +23,32 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+const db = new Pool({
+  connectionString: "postgresql://postgres.nlquunjntkcatxdzgwtc:22062004Ee!1@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?pool_mode=session",
+  ssl: { rejectUnauthorized: false }
+});
+
+
 app.get('/api/test', (req, res) => {
   res.json({ working: true });
 });
 
 // clothes tagging page
+
+function encodeImageBase64(localImagePath) {
+  // Read binary image
+  const img = fs.readFileSync(localImagePath);
+  // Encode to base64
+  const base64 = img.toString('base64');
+  // Infer mime type from extension
+  const ext = path.extname(localImagePath).toLowerCase();
+  let mime = 'image/jpeg';
+  if (ext === '.png') mime = 'image/png';
+  else if (ext === '.webp') mime = 'image/webp';
+  // Return data URL
+  return `data:${mime};base64,${base64}`;
+}
+
 app.get('/api/marketplaceproducts/untagged', async(req, res) => {
  try {
         const result = await db.query(`
@@ -46,8 +69,23 @@ app.get('/api/marketplaceproducts/untagged', async(req, res) => {
 
 
 app.post('/api/ai-scan', async (req, res) => {
-  const { image_url } = req.body;
+  let { image_url } = req.body;
   if (!image_url) return res.status(400).json({ error: "No image_url provided" });
+
+  // If the image_url is a localhost URL, convert it to a local file path and encode to base64
+  if (image_url.startsWith('http://localhost:5000/')) {
+    // Remove domain and get local relative path
+    image_url = image_url.replace('http://localhost:5000', '');
+    // If it starts with `/`, remove the first `/`
+    if (image_url.startsWith('/')) image_url = image_url.slice(1);
+    const localPath = path.join(__dirname, image_url);
+    try {
+      image_url = encodeImageBase64(localPath);
+    } catch (err) {
+      console.error('Failed to read/encode local image:', err);
+      return res.status(400).json({ error: 'Failed to read local image file.' });
+    }
+  }
 
   try {
     const completion = await openai.chat.completions.create({
@@ -61,7 +99,7 @@ app.post('/api/ai-scan', async (req, res) => {
           role: "user",
           content: [
             { type: "text", text: "Analyze this clothing image and return a JSON like: {\"category\":..., \"color\":..., \"tags\": [...]}. Only respond with the JSON." },
-               { type: "image_url", image_url: { url: image_url } }
+            { type: "image_url", image_url: { url: image_url } }
           ]
         }
       ],
@@ -69,21 +107,25 @@ app.post('/api/ai-scan', async (req, res) => {
       temperature: 0.3
     });
 
-    // The response should be valid JSON
-    const text = completion.choices[0].message.content.trim();
-        console.log('AI raw response:', text);
-    // Attempt to parse JSON
-    let aiData;
-    try {
-      aiData = JSON.parse(text);
-    } catch {
-      return res.status(500).json({ error: "Invalid AI response", ai_response: text });
-    }
+    let text = completion.choices[0].message.content.trim();
+console.log('AI raw response:', text);
+
+// Remove code block wrappers if present (```json ... ```)
+if (text.startsWith('```')) {
+  // Remove the first line (```json or ```) and the last line (```)
+  text = text.replace(/^```[a-z]*\n?/i, '').replace(/```$/, '').trim();
+}
+
+let aiData;
+try {
+  aiData = JSON.parse(text);
+} catch (err) {
+  return res.status(500).json({ error: "Invalid AI response", ai_response: text });
+}
     res.json(aiData);
 
   } catch (err) {
-    console.error('OpenAI error:', err); // <-- ADD THIS
-    console.error(err);
+    console.error('OpenAI error:', err);
     res.status(500).json({ error: "OpenAI error" });
   }
 });
@@ -95,7 +137,7 @@ app.post('/api/clothestag', async (req, res) => {
     return res.status(400).json({ error: "Missing required fields" });
 
   try {
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO clothestag
         (product_id, category, tags, color, image_url, ai_analysis_json, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, NOW())
@@ -209,10 +251,6 @@ const db = new Client({
 */
 
 // [NEW CODE]
-const db = new Pool({
-  connectionString: "postgresql://postgres.nlquunjntkcatxdzgwtc:22062004Ee!1@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?pool_mode=session",
-  ssl: { rejectUnauthorized: false }
-});
 
 // [OLD CODE] db.connect() call
 /*

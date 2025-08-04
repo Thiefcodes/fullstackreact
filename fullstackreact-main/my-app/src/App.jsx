@@ -142,6 +142,7 @@ const App = () => {
                           <Link to="/inventory" className="navbar-link">Manage Inventory</Link>
                           <Link to="/usermanagement" className="navbar-link">Manage Users</Link>
                           <Link to="/approvallisting" className="navbar-link">Approve Listings</Link>
+                          <Link to="/AdminScan" className="navbar-link">Admin scan dont remove this</Link>
                       </div>
                       <div className="navbar-auth">
                           <button className="logout-btn" onClick={handleLogout}>Logout</button>
