@@ -105,7 +105,7 @@ const App = () => {
                               </div>
                           )}
                       </div> 
-                      
+
                       {/* Buying Dropdown */}
                       <div className="dropdown" onMouseEnter={() => setOpenDropdown('buying')} onMouseLeave={() => setOpenDropdown(null)}>
                           <a href="#" className="dropbtn" ref={buyingBtnRef} onClick={e => e.preventDefault()}>Buying</a>
@@ -159,7 +159,7 @@ const App = () => {
       <Routes>
         {/* Your New Routes */}
         <Route path="/shop"                element={<EcommercePage />} />
-        <Route path="/products/:productId" element={<ProductDetailsPage />} />
+        <Route path="/products/:productId" element={<ProductDetailsPage />} /> 
         <Route path="/wishlist"            element={<WishlistPage />} />
 
         {/* Public / Auth */}

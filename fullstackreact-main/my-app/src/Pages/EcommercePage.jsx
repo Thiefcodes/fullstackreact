@@ -1,4 +1,4 @@
-// src/pages/EcommercePage.jsx - FULLY INTEGRATED
+// src/pages/EcommercePage.jsx - DEFINITIVELY CORRECTED
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
@@ -16,8 +16,6 @@ const ProductCard = ({ product, initialWishlist, onWishlistChange }) => {
             alert("Please log in to manage your wishlist.");
             return;
         }
-
-        // Determine whether to add (POST) or remove (DELETE)
         const method = isWishlisted ? 'DELETE' : 'POST';
         try {
             const response = await fetch('http://localhost:5000/api/wishlist', {
@@ -26,7 +24,6 @@ const ProductCard = ({ product, initialWishlist, onWishlistChange }) => {
                 body: JSON.stringify({ userId, productId: product.id }),
             });
             if (response.ok) {
-                // Notify the parent component of the change for instant UI update
                 onWishlistChange(product.id, !isWishlisted);
             } else {
                 throw new Error('Could not update wishlist.');
@@ -47,12 +44,21 @@ const ProductCard = ({ product, initialWishlist, onWishlistChange }) => {
         );
     };
 
-    const imageUrl = product.image_urls ? product.image_urls.split(',')[0] : 'https://placehold.co/600x400?text=No+Image';
+    let imageUrl = 'https://placehold.co/600x400?text=No+Image'; 
+    if (Array.isArray(product.image_urls) && product.image_urls.length > 0) {
+        imageUrl = product.image_urls[0];
+    } else if (typeof product.image_urls === 'string' && product.image_urls) {
+        imageUrl = product.image_urls.split(',')[0];
+    }
 
-       return (
+    return (
         <Link to={`/products/${product.id}`} className="product-card-link">
             <div className="product-card">
-                {/* ... (wishlist button remains the same) ... */}
+                <button onClick={handleWishlistClick} className={`wishlist-button ${isWishlisted ? 'active' : ''}`}>
+                    <svg className={`heart-icon ${isWishlisted ? 'active' : ''}`} width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12.0001 5.5C10.0001 2.5 5.00006 3.16667 3.50006 6.5C2.00006 9.83333 6.00006 14 12.0001 19.5C18.0001 14 22.0001 9.83333 20.5001 6.5C19.0001 3.16667 14.0001 2.5 12.0001 5.5Z"/>
+                    </svg>
+                </button>
                 <img src={imageUrl} alt={product.product_name} className="product-image" />
                 <div className="product-info">
                     <div className="product-hover-info">
@@ -60,7 +66,6 @@ const ProductCard = ({ product, initialWishlist, onWishlistChange }) => {
                     </div>
                     <h3 className="product-name">{product.product_name}</h3>
                     <div className="product-hover-info">
-                        {/* UPDATED: Displays the price from the API */}
                         <p className="product-price">
                             {product.price ? `$${product.price}` : 'Unavailable'}
                         </p>
@@ -72,9 +77,10 @@ const ProductCard = ({ product, initialWishlist, onWishlistChange }) => {
 };
 
 
+// The rest of the component is correct and included for completeness.
 const EcommercePage = () => {
     const [products, setProducts] = useState([]);
-    const [wishlist, setWishlist] = useState([]); // State to hold wishlisted product IDs
+    const [wishlist, setWishlist] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const userId = localStorage.getItem('userId');
@@ -87,18 +93,22 @@ const EcommercePage = () => {
         const fetchAllData = async () => {
             setLoading(true);
             try {
-                // Fetch products for the shop
                 const productRes = await fetch('http://localhost:5000/api/shop/products?limit=8');
-                if (!productRes.ok) throw new Error('Network response was not ok');
+                if (!productRes.ok) {
+                    throw new Error(`Failed to fetch products: ${productRes.statusText}`);
+                }
                 const productData = await productRes.json();
-                setProducts(productData.products);
+                
+                if (productData && Array.isArray(productData.products)) {
+                    setProducts(productData.products);
+                } else {
+                    throw new Error("Received invalid data from server.");
+                }
 
-                // If user is logged in, fetch their wishlist
                 if (userId) {
                     const wishlistRes = await fetch(`http://localhost:5000/api/wishlist/ids/${userId}`);
                     if (wishlistRes.ok) {
-                        const wishlistData = await wishlistRes.json();
-                        setWishlist(wishlistData);
+                        setWishlist(await wishlistRes.json());
                     }
                 }
             } catch (err) {
@@ -110,7 +120,6 @@ const EcommercePage = () => {
         fetchAllData();
     }, [userId]);
 
-    // This function updates the UI instantly when a heart icon is clicked
     const handleWishlistChange = (productId, shouldAdd) => {
         if (shouldAdd) {
             setWishlist(prev => [...prev, productId]);

@@ -1541,47 +1541,38 @@ app.put('/api/variants/:variantId/stock', async (req, res) => {
     // If neither block runs, the request is invalid.
     return res.status(400).json({ error: 'Invalid request. Provide either stock_amt for an immediate update or scheduled_stock_amount and scheduled_date for a scheduled update.' });
 });
+
 // =================================================================
-//  ===> YOUR NEW DEDICATED SHOP & WISHLIST ROUTES <===
+//  ===> CUSTOMER-FACING SHOP ROUTES (CORRECTED) <===
 // =================================================================
 
-// --- CUSTOMER-FACING SHOP ROUTES ---
 app.get('/api/shop/products', async (req, res) => {
-    const { search, page = 1, limit = 9 } = req.query;
+    const { category, search, page = 1, limit = 9 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
-
     let queryParams = [];
-    // Only show products that have at least one active variant
     let whereClauses = ["EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active')"];
-
+    if (category) {
+        queryParams.push(`%${category}%`);
+        whereClauses.push(`p.categories ILIKE $${queryParams.length}`);
+    }
     if (search) {
         queryParams.push(`%${search}%`);
         whereClauses.push(`(p.product_name ILIKE $${queryParams.length} OR p.product_description ILIKE $${queryParams.length})`);
     }
-
     const whereString = `WHERE ${whereClauses.join(' AND ')}`;
-
-    // This query now gets the main product info AND calculates the minimum price from its active variants
     const dataQuery = `
-        SELECT 
-            p.*,
-            (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price
-        FROM products p
-        ${whereString}
+        SELECT p.*, (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price
+        FROM products p ${whereString}
         ORDER BY p.created_at DESC
         LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
     `;
     const dataParams = [...queryParams, parseInt(limit), offset];
-    
     const countQuery = `SELECT COUNT(p.id) FROM products p ${whereString}`;
-
     try {
         const productsResult = await db.query(dataQuery, dataParams);
         const countResult = await db.query(countQuery, queryParams);
-        
         const totalProducts = parseInt(countResult.rows[0].count, 10);
         const totalPages = Math.ceil(totalProducts / parseInt(limit));
-
         res.json({ products: productsResult.rows, totalProducts, totalPages, currentPage: parseInt(page) });
     } catch (err) {
         console.error('Error fetching shop products:', err.message);
@@ -1592,16 +1583,9 @@ app.get('/api/shop/products', async (req, res) => {
 app.get('/api/shop/product/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        // This query uses JSON aggregation to get the product and all its variants in one go
         const query = `
-            SELECT p.*, 
-                   COALESCE(
-                       (SELECT json_agg(pv.* ORDER BY pv.size) 
-                        FROM product_variants pv 
-                        WHERE pv.product_id = p.id AND pv.status = 'active'), 
-                   '[]'::json) AS variants
-            FROM products p
-            WHERE p.id = $1;
+            SELECT p.*, COALESCE((SELECT json_agg(pv.* ORDER BY pv.size) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active'), '[]'::json) AS variants
+            FROM products p WHERE p.id = $1;
         `;
         const result = await db.query(query, [id]);
         if (result.rows.length === 0) {
@@ -1614,19 +1598,7 @@ app.get('/api/shop/product/:id', async (req, res) => {
     }
 });
 
-// --- CATEGORY MANAGEMENT ROUTES ---
-app.get('/api/categories/sidebar', async (req, res) => {
-    try {
-        const query = `SELECT c.id, c.name, COALESCE((SELECT json_agg(json_build_object('id', s.id, 'name', s.name) ORDER BY s.name) FROM sub_categories s WHERE s.parent_category_id = c.id), '[]'::json) AS sub_categories FROM categories c ORDER BY c.name;`;
-        const { rows } = await db.query(query);
-        res.status(200).json(rows);
-    } catch (err) {
-        console.error('Error fetching sidebar categories:', err.message);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// --- WISHLIST MANAGEMENT ROUTES ---
+// --- WISHLIST MANAGEMENT ROUTES (Correct and Unchanged) ---
 app.get('/api/wishlist/ids/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
@@ -1637,17 +1609,12 @@ app.get('/api/wishlist/ids/:userId', async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 });
-
 app.get('/api/wishlist/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
-        // This query now joins with the new 'products' table and gets the minimum price
         const query = `
-            SELECT 
-                p.*,
-                (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price
-            FROM products p
-            JOIN wishlist_items w ON p.id = w.product_id
+            SELECT p.*, (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price
+            FROM products p JOIN wishlist_items w ON p.id = w.product_id
             WHERE w.user_id = $1;
         `;
         const { rows } = await db.query(query, [userId]);
@@ -1657,7 +1624,6 @@ app.get('/api/wishlist/:userId', async (req, res) => {
         res.status(500).json({ error: 'Server error while fetching wishlist items.' });
     }
 });
-
 app.post('/api/wishlist', async (req, res) => {
     const { userId, productId } = req.body;
     if (!userId || !productId) return res.status(400).json({ error: 'User ID and Product ID are required.' });
@@ -1670,7 +1636,6 @@ app.post('/api/wishlist', async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 });
-
 app.delete('/api/wishlist', async (req, res) => {
     const { userId, productId } = req.body;
     if (!userId || !productId) return res.status(400).json({ error: 'User ID and Product ID are required.' });

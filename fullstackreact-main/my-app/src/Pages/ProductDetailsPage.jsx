@@ -1,4 +1,4 @@
-// src/pages/ProductDetailsPage.jsx - FULLY INTEGRATED
+// src/pages/ProductDetailsPage.jsx - DEFINITIVELY CORRECTED
 
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
@@ -25,7 +25,7 @@ const ProductDetailsPage = () => {
     const [product, setProduct] = useState(null);
     const [variants, setVariants] = useState([]);
     const [reviews, setReviews] = useState([]);
-    const [wishlist, setWishlist] = useState([]); // Holds array of wishlisted product IDs
+    const [wishlist, setWishlist] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedVariant, setSelectedVariant] = useState(null);
@@ -56,7 +56,6 @@ const ProductDetailsPage = () => {
         };
         fetchAllData();
     }, [productId, userId]);
-
 
     const isWishlisted = product ? wishlist.includes(product.id) : false;
 
@@ -108,9 +107,14 @@ const ProductDetailsPage = () => {
     if (error) return <div className="page-center">Error: {error}</div>;
     if (!product) return <div className="page-center">Product not found.</div>;
     
-    const imageUrl = product.image_urls ? product.image_urls.split(',')[0] : 'https://placehold.co/600x400?text=No+Image';
+    let imageUrl = 'https://placehold.co/600x400?text=No+Image';
+    if (Array.isArray(product.image_urls) && product.image_urls.length > 0) {
+        imageUrl = product.image_urls[0];
+    } else if (typeof product.image_urls === 'string' && product.image_urls) {
+        imageUrl = product.image_urls.split(',')[0];
+    }
+    
     const SIZES = ["S", "M", "L", "XL"]; 
-    const availableSizes = variants.map(v => v.size);
 
     return (
         <div className="details-page-container">
@@ -148,9 +152,13 @@ const ProductDetailsPage = () => {
                     </div>
                     <p className="product-tags">{product.categories}</p>
                     
-                    <p className="product-price-details">
-                        {selectedVariant ? `$${selectedVariant.price}` : 'Select a size to see the price'}
-                    </p>
+                    <div className="product-price-container">
+                        {selectedVariant ? (
+                            <p className="product-price-details">{`$${selectedVariant.price}`}</p>
+                        ) : (
+                            <p className="price-placeholder">Select a size to see the price</p>
+                        )}
+                    </div>
 
                     <div className="size-selector">
                         <p className="size-label">Select Size</p>
@@ -178,16 +186,19 @@ const ProductDetailsPage = () => {
                     </div>
 
                     <div className="action-buttons">
-                        <button className="add-to-cart-btn" onClick={handleAddToCart} disabled={!selectedSize}>
+                        <button className="add-to-cart-btn" onClick={handleAddToCart} disabled={!selectedVariant}>
                             Add To Cart
                         </button>
                         <button onClick={handleWishlistToggle} className={`wishlist-btn ${isWishlisted ? 'active' : ''}`}>
-                            ❤ {/* Heart Icon */}
+                            <svg className={`heart-icon ${isWishlisted ? 'active' : ''}`} width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12.0001 5.5C10.0001 2.5 5.00006 3.16667 3.50006 6.5C2.00006 9.83333 6.00006 14 12.0001 19.5C18.0001 14 22.0001 9.83333 20.5001 6.5C19.0001 3.16667 14.0001 2.5 12.0001 5.5Z"/>
+                            </svg>
                         </button>
                     </div>
                 </div>
             </main>
 
+            {/* THIS SECTION IS NOW RESTORED */}
             <section className="product-accordion-section">
                 <AccordionItem
                     title="Features"
