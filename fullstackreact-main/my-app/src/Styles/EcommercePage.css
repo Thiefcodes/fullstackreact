@@ -229,3 +229,16 @@
 .product-card:hover .wishlist-button {
     opacity: 1; transform: scale(1);
 }
+
+.wishlist-button .heart-icon {
+    stroke: black;
+    fill: white;
+    transition: fill 0.2s ease;
+}
+.wishlist-button .heart-icon.active {
+    fill: red;
+}
+
+.wishlist-button:hover .heart-icon {
+    fill: red;
+}

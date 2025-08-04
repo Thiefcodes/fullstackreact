@@ -1,76 +1,103 @@
+// src/pages/CartPage.jsx - DEFINITIVELY CORRECTED
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 const CartPage = () => {
-    const [cartItems, setCartItems] = useState([]);
+    // THIS LINE WAS MISSING
+    const [unifiedCart, setUnifiedCart] = useState([]);
+    
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const userId = localStorage.getItem('userId');
     const navigate = useNavigate();
-
     const [selectedItems, setSelectedItems] = useState({});
 
-    const fetchCartItems = async () => {
-        if (!userId) {
-            setError("Please log in to view your cart.");
-            setLoading(false);
-            return;
-        }
-        try {
-            setLoading(true);
-            const response = await axios.get(`http://localhost:5000/api/cart/${userId}`);
-            setCartItems(response.data);
-            setError(null);
-        } catch (err) {
-            console.error("Error fetching cart items:", err);
-            setError("Failed to load cart.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
     useEffect(() => {
-        fetchCartItems();
+        const fetchAllCartItems = async () => {
+            if (!userId) {
+                setError("Please log in to view your cart.");
+                setLoading(false);
+                return;
+            }
+            try {
+                setLoading(true);
+                const [marketplaceRes, shopRes] = await Promise.all([
+                    axios.get(`http://localhost:5000/api/cart/${userId}`),
+                    axios.get(`http://localhost:5000/api/shop/cart/${userId}`)
+                ]);
+
+                const marketplaceItems = marketplaceRes.data.map(item => ({
+                    id: item.id,
+                    cart_item_id: `mkt-${item.cart_item_id}`, // Added prefix for unique key
+                    name: item.title,
+                    size: item.size,
+                    price: item.price,
+                    imageUrl: item.image_url || `https://placehold.co/100x100`,
+                    type: 'marketplace'
+                }));
+
+                const shopItems = shopRes.data.map(item => ({
+                    id: item.variant_id,
+                    cart_item_id: `shop-${item.variant_id}`, // Added prefix for unique key
+                    name: item.product_name,
+                    size: item.size,
+                    price: item.price,
+                    imageUrl: (Array.isArray(item.image_urls) && item.image_urls.length > 0) ? item.image_urls[0] : `https://placehold.co/100x100`,
+                    type: 'shop'
+                }));
+
+                setUnifiedCart([...marketplaceItems, ...shopItems]);
+                setError(null);
+            } catch (err) {
+                console.error("Error fetching cart items:", err);
+                setError("Failed to load cart.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchAllCartItems();
     }, [userId]);
 
-    const handleRemoveFromCart = async (productId) => {
+    const handleRemoveFromCart = async (item) => {
         try {
-            await axios.delete(`http://localhost:5000/api/cart/${userId}/${productId}`);
-            // Refetch cart items to update the UI
-            fetchCartItems();
+            if (item.type === 'marketplace') {
+                // Your teammate's remove endpoint uses the product ID
+                await axios.delete(`http://localhost:5000/api/cart/${userId}/${item.id}`);
+            } else if (item.type === 'shop') {
+                // Your new remove endpoint uses the variant ID
+                await axios.delete(`http://localhost:5000/api/shop/cart/${userId}/${item.id}`);
+            }
+            setUnifiedCart(prev => prev.filter(cartItem => cartItem.cart_item_id !== item.cart_item_id));
         } catch (err) {
             console.error("Error removing from cart:", err);
             alert("Failed to remove item from cart.");
         }
     };
-
+    
     const handleCheckboxChange = (cartItemId) => {
-        setSelectedItems(prevSelectedItems => ({
-            ...prevSelectedItems,
-            [cartItemId]: !prevSelectedItems[cartItemId] // Toggle the boolean value
-        }));
+        setSelectedItems(prev => ({ ...prev, [cartItemId]: !prev[cartItemId] }));
     };
 
     const calculateTotal = () => {
-        return cartItems
-            .filter(item => selectedItems[item.cart_item_id]) // Only include items where selected is true
+        return unifiedCart
+            .filter(item => selectedItems[item.cart_item_id])
             .reduce((total, item) => total + parseFloat(item.price), 0)
             .toFixed(2);
     };
 
-    const handleProceedToCheckout = () => {
-        const itemsToCheckout = cartItems.filter(item => selectedItems[item.cart_item_id]);
-        
-        if (itemsToCheckout.length === 0) {
-            alert("Please select at least one item to check out.");
-            return;
-        }
+const handleProceedToCheckout = () => {
+    const itemsToCheckout = unifiedCart.filter(item => selectedItems[item.cart_item_id]);
+    
+    if (itemsToCheckout.length === 0) {
+        alert("Please select at least one item to check out.");
+        return;
+    }
 
-        // Use navigate to go to the checkout page and pass the selected items in the state.
-        // This is a clean way to pass data between routes without using localStorage.
-        navigate('/checkout', { state: { items: itemsToCheckout } });
-    };
+    navigate('/checkout', { state: { items: itemsToCheckout } });
+};
 
     if (loading) return <p>Loading your cart...</p>;
     if (error) return <p style={{ color: 'red' }}>{error}</p>;
@@ -78,23 +105,23 @@ const CartPage = () => {
     return (
         <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
             <h1>Your Shopping Cart</h1>
-            {cartItems.length > 0 ? (
+            {unifiedCart.length > 0 ? (
                 <div>
-                    {cartItems.map(item => (
+                    {unifiedCart.map(item => (
                         <div key={item.cart_item_id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #ccc', padding: '10px 0' }}>
                             <input 
                                 type="checkbox" 
-                                checked={!!selectedItems[item.cart_item_id]} // Use !! to ensure it's always a boolean
+                                checked={!!selectedItems[item.cart_item_id]}
                                 onChange={() => handleCheckboxChange(item.cart_item_id)}
                                 style={{ marginRight: '15px', transform: 'scale(1.5)' }}
                             />
-                            <img src={item.image_url || `https://placehold.co/100x100`} alt={item.title} style={{ width: '100px', height: '100px', objectFit: 'cover', marginRight: '20px' }} />
+                            <img src={item.imageUrl} alt={item.name} style={{ width: '100px', height: '100px', objectFit: 'cover', marginRight: '20px' }} />
                             <div style={{ flexGrow: 1 }}>
-                                <h3>{item.title}</h3>
+                                <h3>{item.name}</h3>
                                 <p>Size: {item.size}</p>
                                 <p style={{ fontWeight: 'bold' }}>${item.price}</p>
                             </div>
-                            <button onClick={() => handleRemoveFromCart(item.id)} style={{ background: 'red', color: 'white', border: 'none', padding: '8px 12px', cursor: 'pointer' }}>
+                            <button onClick={() => handleRemoveFromCart(item)} style={{ background: 'red', color: 'white', border: 'none', padding: '8px 12px', cursor: 'pointer' }}>
                                 Remove
                             </button>
                         </div>
@@ -107,7 +134,7 @@ const CartPage = () => {
                     </div>
                 </div>
             ) : (
-                <p>Your cart is empty.</p>
+                 <p>Your cart is empty.</p>
             )}
         </div>
     );

@@ -54,7 +54,7 @@ const ProductCard = ({ product, initialWishlist, onWishlistChange }) => {
     return (
         <Link to={`/products/${product.id}`} className="product-card-link">
             <div className="product-card">
-                <button onClick={handleWishlistClick} className={`wishlist-button ${isWishlisted ? 'active' : ''}`}>
+                <button onClick={handleWishlistClick} className="wishlist-button">
                     <svg className={`heart-icon ${isWishlisted ? 'active' : ''}`} width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M12.0001 5.5C10.0001 2.5 5.00006 3.16667 3.50006 6.5C2.00006 9.83333 6.00006 14 12.0001 19.5C18.0001 14 22.0001 9.83333 20.5001 6.5C19.0001 3.16667 14.0001 2.5 12.0001 5.5Z"/>
                     </svg>
