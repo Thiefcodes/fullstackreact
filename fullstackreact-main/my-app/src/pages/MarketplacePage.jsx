@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 
+const getSustainabilityColor = (score) => {
+    if (score >= 8) return '#4caf50'; // Green - Excellent
+    if (score >= 5) return '#ff9800'; // Orange - Good
+    return '#f44336'; // Red - Needs Improvement
+};
+
 // This is a simple component for displaying a single product card.
 // We can keep it in the same file for simplicity or move it to its own file later.
 const ProductCard = ({ product }) => {
@@ -30,6 +36,38 @@ const ProductCard = ({ product }) => {
         }
     };
 
+    const [sustainabilityScore, setSustainabilityScore] = useState(null);
+    
+    useEffect(() => {
+        const fetchOrAnalyzeSustainabilityScore = async () => {
+    const imageUrl = product.image_url?.[0]; // assumes array of images
+
+    if (!imageUrl || !product.id) return;
+
+    try {
+      const response = await axios.get(`http://localhost:5000/api/product-sustainability/${product.id}`);
+      setSustainabilityScore(response.data.score);
+    } catch (err) {
+      if (err.response?.status === 404) {
+        console.warn(`No sustainability score found for product ${product.id}. Analyzing...`);
+        try {
+          const analysisResponse = await axios.post(`http://localhost:5000/api/analyze-sustainability`, {
+            product_id: product.id,
+            image_url: imageUrl
+          });
+          setSustainabilityScore(analysisResponse.data.score);
+        } catch (analysisErr) {
+          console.error("Error analyzing sustainability:", analysisErr);
+        }
+      } else {
+        console.error("Error fetching sustainability score:", err);
+      }
+    }
+  };
+
+  fetchOrAnalyzeSustainabilityScore();
+    }, [product.id]);
+
     return (
         <div style={{ border: '1px solid #ccc', borderRadius: '8px', padding: '16px', margin: '8px', width: '250px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
@@ -57,6 +95,35 @@ const ProductCard = ({ product }) => {
                 </p>
 
             </div>
+            {sustainabilityScore && (
+                <div style={{ 
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    padding: '4px 8px',
+                    backgroundColor: getSustainabilityColor(sustainabilityScore),
+                    color: 'white',
+                    borderRadius: '4px',
+                    fontWeight: 'bold',
+                    fontSize: '0.9em',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }}>
+                    {sustainabilityScore}/10
+                </div>
+            )}
+
+            {sustainabilityScore && (
+                <div style={{ 
+                    marginTop: '8px',
+                    fontSize: '0.8em',
+                    color: '#666',
+                    textAlign: 'center',
+                    borderTop: '1px solid #eee',
+                    paddingTop: '8px'
+                }}>
+                    🌱 Earn {sustainabilityScore * 10} points with purchase
+                </div>
+            )}
             <button onClick={handleAddToCart} style={{ padding: '8px', cursor: 'pointer', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>
                 Add to Cart
             </button>
@@ -70,36 +137,59 @@ const MarketplacePage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // useEffect hook to fetch data when the component mounts
     useEffect(() => {
         const fetchProducts = async () => {
             try {
-                // === THIS IS THE CORE LOGIC ===
-                // 1. Get the logged-in user's ID from localStorage.
                 const userId = localStorage.getItem('userId');
-
-                // 2. Construct the base API URL.
                 let apiUrl = 'http://localhost:5000/api/marketplaceproducts';
-
-                // 3. If a user is logged in, add their ID as a query parameter to exclude their listings.
                 if (userId) {
                     apiUrl += `?excludeUserId=${userId}`;
                 }
-
-                // 4. Make the GET request to the constructed URL.
                 const response = await axios.get(apiUrl);
                 setProducts(response.data);
-                setError(null);
             } catch (err) {
-                console.error("Error fetching products:", err);
-                setError('Failed to load products. Please try again later.');
+                setError('Failed to load products.');
             } finally {
                 setLoading(false);
             }
         };
-
         fetchProducts();
-    }, []); // The empty dependency array [] means this effect runs once on mount
+
+        // === THIS IS THE FIX ===
+        // Set up the WebSocket connection to listen for live updates.
+        const ws = new WebSocket('ws://localhost:5000');
+
+        ws.onopen = () => {
+            console.log('Marketplace WebSocket connection established.');
+        };
+
+        ws.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+
+            if (message.type === 'PRODUCT_SCORE_UPDATE') {
+                const updatedProduct = message.product;
+                console.log(`Received update for product #${updatedProduct.id}`);
+                
+                // Update the state by finding the product in the existing array
+                // and replacing it with the new version from the server.
+                setProducts(currentProducts => 
+                    currentProducts.map(p => 
+                        p.id === updatedProduct.id ? updatedProduct : p
+                    )
+                );
+            }
+        };
+
+        ws.onclose = () => {
+            console.log('Marketplace WebSocket connection closed.');
+        };
+
+        // Cleanup function to close the connection when the component unmounts.
+        return () => {
+            ws.close();
+        };
+
+    }, []); // The empty dependency array ensures this runs only once on mount.
 
     if (loading) return <p>Loading products...</p>;
     if (error) return <p style={{ color: 'red' }}>{error}</p>;
@@ -114,7 +204,7 @@ const MarketplacePage = () => {
                         <ProductCard key={product.id} product={product} />
                     ))
                 ) : (
-                    <p>No products available right now. Check back soon!</p>
+                    <p>No products available right now.</p>
                 )}
             </div>
         </div>

@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 
 const CheckoutPage = () => {
@@ -12,11 +12,41 @@ const CheckoutPage = () => {
     const [paymentMethod, setPaymentMethod] = useState('CreditCard');
     const [isProcessing, setIsProcessing] = useState(false);
 
+    const [availableVouchers, setAvailableVouchers] = useState([]);
+    const [selectedVoucher, setSelectedVoucher] = useState(null);
+    const [voucherLoading, setVoucherLoading] = useState(true);
+
     const SHIPPING_FEE = 5.00;
 
     const subtotal = useMemo(() => itemsToCheckout.reduce((total, item) => total + parseFloat(item.price), 0), [itemsToCheckout]);
     const shippingFee = useMemo(() => deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0, [deliveryMethod]);
-    const totalPrice = useMemo(() => (subtotal + shippingFee).toFixed(2), [subtotal, shippingFee]);
+    //const totalPrice = useMemo(() => (subtotal + shippingFee).toFixed(2), [subtotal, shippingFee]);
+
+    useEffect(() => {
+        const fetchVouchers = async () => {
+            try {
+                const response = await axios.get(`http://localhost:5000/api/user-vouchers/${localStorage.getItem('userId')}`);
+                setAvailableVouchers(response.data.filter(v => v.is_active));
+                setVoucherLoading(false);
+            } catch (err) {
+                console.error("Error fetching vouchers:", err);
+                setVoucherLoading(false);
+            }
+        };
+        
+        fetchVouchers();
+    }, []);
+    
+    // Calculate discount
+    const discountAmount = useMemo(() => {
+        if (!selectedVoucher) return 0;
+        return (subtotal * selectedVoucher.discount_percent / 100).toFixed(2);
+    }, [selectedVoucher, subtotal]);
+    
+    // Update total price calculation
+    const totalPrice = useMemo(() => {
+        return (subtotal + shippingFee - parseFloat(discountAmount || 0)).toFixed(2);
+    }, [subtotal, shippingFee, discountAmount]);
 
     const handlePayNow = async () => {
         const userId = localStorage.getItem('userId');
@@ -122,6 +152,67 @@ const CheckoutPage = () => {
                             <input type="radio" name="payment" value="PayPal" checked={paymentMethod === 'PayPal'} onChange={(e) => setPaymentMethod(e.target.value)} />
                             <strong> PayPal</strong>
                         </label>
+                    </div>
+                </div>
+
+                <div style={{ marginTop: '30px' }}>
+                    <h3>Apply Voucher</h3>
+                    {voucherLoading ? (
+                        <p>Loading vouchers...</p>
+                    ) : availableVouchers.length > 0 ? (
+                        <select 
+                            value={selectedVoucher?.id || ''}
+                            onChange={(e) => {
+                                const voucherId = e.target.value;
+                                setSelectedVoucher(
+                                    voucherId ? availableVouchers.find(v => v.id === parseInt(voucherId)) : null
+                                );
+                            }}
+                            style={{ width: '100%', padding: '10px', marginBottom: '10px' }}
+                        >
+                            <option value="">No voucher</option>
+                            {availableVouchers.map(voucher => (
+                                <option key={voucher.id} value={voucher.id}>
+                                    {voucher.code} ({voucher.discount_percent}% off)
+                                </option>
+                            ))}
+                        </select>
+                    ) : (
+                        <p>No vouchers available. <Link to="/redeem-vouchers">Redeem some now!</Link></p>
+                    )}
+                    
+                    {selectedVoucher && (
+                        <div style={{ 
+                            backgroundColor: '#e8f5e9',
+                            padding: '10px',
+                            borderRadius: '4px',
+                            marginTop: '10px'
+                        }}>
+                            <p style={{ margin: 0 }}>
+                                <strong>{selectedVoucher.discount_percent}% discount</strong> applied (-${discountAmount})
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                <div style={{ marginTop: '20px', borderTop: '2px solid #333', paddingTop: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <p>Subtotal:</p>
+                        <p>${subtotal.toFixed(2)}</p>
+                    </div>
+                    {selectedVoucher && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4CAF50' }}>
+                            <p>Discount:</p>
+                            <p>-${discountAmount}</p>
+                        </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <p>Shipping Fee:</p>
+                        <p>${shippingFee.toFixed(2)}</p>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.2em' }}>
+                        <p>Total:</p>
+                        <p>${totalPrice}</p>
                     </div>
                 </div>
 

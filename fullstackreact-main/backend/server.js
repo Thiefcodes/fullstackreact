@@ -9,6 +9,16 @@ const nodemailer = require('nodemailer');
 const { WebSocketServer } = require('ws');
 const fs = require('fs');
 const path = require('path');
+const { analyzeSustainability, analyzeSustainabilityByText } = require('./gemini');
+
+
+const broadcast = (data) => {
+    wss.clients.forEach((client) => {
+        if (client.readyState === client.OPEN) {
+            client.send(JSON.stringify(data));
+        }
+    });
+};
 
 app.use(cors());
 app.use(express.json());
@@ -816,20 +826,52 @@ app.post('/api/marketplaceproducts', async (req, res) => {
   try {
     const { seller_id, title, description, price, category, size, image_url } = req.body;
 
-    // Basic validation
     if (!seller_id || !title || !price || !category) {
-      return res.status(400).json({ error: 'Missing required fields: seller_id, title, price, category.' });
+      return res.status(400).json({ error: 'Missing required fields.' });
     }
 
+    // Step 1: Insert the product into the database
     const newProductQuery = `
       INSERT INTO marketplaceproducts (seller_id, title, description, price, category, size, image_url, status)
       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
       RETURNING *;
     `;
-    const values = [seller_id, title, description, price, category, size, image_url];
-
+    const values = [parseInt(seller_id, 10), title, description, price, category, size, image_url];
     const result = await db.query(newProductQuery, values);
-    res.status(201).json(result.rows[0]);
+    const newProduct = result.rows[0];
+
+    // Step 2: Immediately respond to the user
+    res.status(201).json(newProduct);
+
+    // Step 3: Asynchronously analyze sustainability using title and description
+    analyzeSustainabilityByText(title, description)
+      .then(sustainabilityData => {
+        if (sustainabilityData && sustainabilityData.score) {
+          console.log(`AI Sustainability Score for product #${newProduct.id}: ${sustainabilityData.score}/10`);
+          
+          // Save to product_sustainability table
+          const insertQuery = `
+            INSERT INTO product_sustainability (product_id, score, analysis_text)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (product_id) DO UPDATE SET score = $2, analysis_text = $3
+          `;
+          
+          return db.query(insertQuery, [newProduct.id, sustainabilityData.score, sustainabilityData.analysis]);
+        }
+      })
+      .then(() => {
+        // Broadcast the update to all clients
+        return db.query('SELECT * FROM marketplaceproducts WHERE id = $1', [newProduct.id]);
+      })
+      .then(updatedResult => {
+        if (updatedResult && updatedResult.rows.length > 0) {
+          broadcast({
+            type: 'PRODUCT_SCORE_UPDATE',
+            product: updatedResult.rows[0]
+          });
+        }
+      })
+      .catch(err => console.error(`Sustainability analysis failed for product #${newProduct.id}:`, err));
 
   } catch (err) {
     console.error('Error creating product:', err.message);
@@ -1031,9 +1073,9 @@ app.post('/api/orders', async (req, res) => {
     const client = await db.connect();
 
     try {
-        await client.query('BEGIN'); // START THE TRANSACTION
+        await client.query('BEGIN');
 
-        // 1. Create a single entry in the 'orders' table (this logic is mostly the same)
+        // Create order
         const orderQuery = `
             INSERT INTO orders (buyer_id, total_price, delivery_method, shipping_fee, user_order_id)
             VALUES ($1, $2, $3, $4, (SELECT COUNT(*) FROM orders WHERE buyer_id = $1) + 1)
@@ -1042,49 +1084,78 @@ app.post('/api/orders', async (req, res) => {
         const orderResult = await client.query(orderQuery, [userId, totalPrice, deliveryMethod, shippingFee]);
         const newOrderId = orderResult.rows[0].id;
 
-        // 2. Loop through all items and process them based on their type
+        // Process items and track sustainability points
+        let totalSustainabilityPoints = 0;
+
         for (const item of items) {
-            // Insert into the new, flexible order_items table
+            // Insert order item
             const orderItemQuery = `
                 INSERT INTO order_items (order_id, purchased_item_id, item_type, price_at_purchase)
                 VALUES ($1, $2, $3, $4);
             `;
             await client.query(orderItemQuery, [newOrderId, item.id, item.type, item.price]);
 
-            // 3. Update inventory based on the item type
+            // Update inventory based on item type
             if (item.type === 'marketplace') {
-                // For marketplace items, mark as 'sold'
                 const updateMarketplaceQuery = `
                     UPDATE marketplaceproducts SET status = 'sold' WHERE id = $1 AND status = 'available';
                 `;
                 const result = await client.query(updateMarketplaceQuery, [item.id]);
                 if (result.rowCount === 0) throw new Error(`Marketplace item "${item.name}" is no longer available.`);
                 
-                // Delete from the marketplace cart
                 await client.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id = $2', [userId, item.id]);
 
+                // Get sustainability score for this product
+                const sustainabilityResult = await client.query(
+                    'SELECT score FROM product_sustainability WHERE product_id = $1',
+                    [item.id]
+                );
+                
+                if (sustainabilityResult.rows.length > 0) {
+                    const score = sustainabilityResult.rows[0].score;
+                    // Award points based on score (e.g., score * 10)
+                    totalSustainabilityPoints += score * 10;
+                }
+
             } else if (item.type === 'shop') {
-                // For shop items, decrement the stock
                 const updateShopQuery = `
                     UPDATE product_variants SET stock_amt = stock_amt - 1 WHERE id = $1 AND stock_amt > 0;
                 `;
-                const result = await client.query(updateShopQuery, [item.id]); // item.id is the variant_id here
+                const result = await client.query(updateShopQuery, [item.id]);
                 if (result.rowCount === 0) throw new Error(`Shop item "${item.name} (${item.size})" is out of stock.`);
 
-                // Delete from the shop cart
                 await client.query('DELETE FROM shop_cart_items WHERE user_id = $1 AND variant_id = $2', [userId, item.id]);
             }
         }
 
-        await client.query('COMMIT'); // COMMIT THE TRANSACTION
+        // Award sustainability points if any were earned
+        if (totalSustainabilityPoints > 0) {
+            await client.query(
+                `INSERT INTO user_sustainability_points (user_id, points)
+                 VALUES ($1, $2)
+                 ON CONFLICT (user_id) DO UPDATE SET points = user_sustainability_points.points + $2`,
+                [userId, totalSustainabilityPoints]
+            );
+            
+            await client.query(
+                `INSERT INTO sustainability_points_history (user_id, points_change, reason, order_id)
+                 VALUES ($1, $2, $3, $4)`,
+                [userId, totalSustainabilityPoints, 'Points earned from sustainable purchase', newOrderId]
+            );
+        }
+
+        await client.query('COMMIT');
         
-        simulateDelivery(newOrderId); // This function from your teammate's code can remain
-        res.status(201).json({ message: 'Order created successfully!', orderId: newOrderId });
+        simulateDelivery(newOrderId);
+        res.status(201).json({ 
+            message: 'Order created successfully!', 
+            orderId: newOrderId,
+            sustainabilityPointsEarned: totalSustainabilityPoints 
+        });
 
     } catch (err) {
-        await client.query('ROLLBACK'); // If anything fails, undo all changes
+        await client.query('ROLLBACK');
         console.error('Error creating unified order:', err.message);
-        // Send a more user-friendly error message
         res.status(500).json({ error: err.message || 'Server error while creating order.' });
     } finally {
         client.release();
@@ -1314,6 +1385,239 @@ app.get('/api/reviews/seller/:sellerId', async (req, res) => {
 });
 
 // ===============================================
+
+// jun hong's codes (sustainability endpoints)
+
+// Sustainability endpoints
+app.post('/api/analyze-sustainability', async (req, res) => {
+    const { image_url, product_id } = req.body;
+    console.log("🚀 Analyzing product", product_id, "with image:", image_url);
+    
+    if (!image_url || !product_id) {
+        return res.status(400).json({ error: "Image URL and product ID are required" });
+    }
+
+    try {
+        // Call Google Gemini API to analyze sustainability
+        const sustainabilityData = await analyzeSustainability(image_url);
+        
+        // Save to database
+        await db.query(
+            `INSERT INTO product_sustainability (product_id, score, analysis_text)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (product_id) DO UPDATE SET score = $2, analysis_text = $3`,
+            [product_id, sustainabilityData.score, sustainabilityData.analysis]
+        );
+
+        res.json({ score: sustainabilityData.score, analysis: sustainabilityData.analysis });
+    } catch (err) {
+        console.error("Sustainability analysis error:", err);
+        res.status(500).json({ error: "Failed to analyze sustainability" });
+    }
+});
+
+app.get('/api/user-points/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const result = await db.query(
+            'SELECT points FROM user_sustainability_points WHERE user_id = $1',
+            [userId]
+        );
+        if (result.rows.length === 0) {
+            // Initialize with 0 points if user doesn't have a record
+            await db.query(
+                'INSERT INTO user_sustainability_points (user_id, points) VALUES ($1, 0)',
+                [userId]
+            );
+            return res.json({ points: 0 });
+        }
+        res.json({ points: result.rows[0].points });
+    } catch (err) {
+        console.error("Error fetching user points:", err);
+        res.status(500).json({ error: "Failed to fetch points" });
+    }
+});
+
+app.get('/api/vouchers', async (req, res) => {
+    try {
+        const result = await db.query(
+            'SELECT * FROM vouchers WHERE is_active = TRUE ORDER BY points_cost'
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Error fetching vouchers:", err);
+        res.status(500).json({ error: "Failed to fetch vouchers" });
+    }
+});
+
+app.post('/api/redeem-voucher', async (req, res) => {
+    const { userId, voucherId } = req.body;
+    
+    if (!userId || !voucherId) {
+        return res.status(400).json({ error: "User ID and voucher ID are required" });
+    }
+
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // Get voucher details
+        const voucherResult = await client.query(
+            'SELECT * FROM vouchers WHERE id = $1 AND is_active = TRUE',
+            [voucherId]
+        );
+        if (voucherResult.rows.length === 0) {
+            return res.status(404).json({ error: "Voucher not found or inactive" });
+        }
+        const voucher = voucherResult.rows[0];
+        
+        // Check user has enough points
+        const userPointsResult = await client.query(
+            'SELECT points FROM user_sustainability_points WHERE user_id = $1 FOR UPDATE',
+            [userId]
+        );
+        if (userPointsResult.rows.length === 0 || userPointsResult.rows[0].points < voucher.points_cost) {
+            return res.status(400).json({ error: "Not enough sustainability points" });
+        }
+        
+        // Deduct points
+        await client.query(
+            'UPDATE user_sustainability_points SET points = points - $1 WHERE user_id = $2',
+            [voucher.points_cost, userId]
+        );
+        
+        // Add voucher to user
+        await client.query(
+            'INSERT INTO user_vouchers (user_id, voucher_id) VALUES ($1, $2)',
+            [userId, voucherId]
+        );
+        
+        // Record points transaction
+        await client.query(
+            'INSERT INTO sustainability_points_history (user_id, points_change, reason) VALUES ($1, $2, $3)',
+            [userId, -voucher.points_cost, `Redeemed voucher: ${voucher.code}`]
+        );
+        
+        await client.query('COMMIT');
+        res.json({ success: true, voucher: voucher.code });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Voucher redemption error:", err);
+        res.status(500).json({ error: "Failed to redeem voucher" });
+    } finally {
+        client.release();
+    }
+});
+
+app.get('/api/user-vouchers/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const result = await db.query(
+            `SELECT uv.*, v.code, v.discount_percent, v.points_cost 
+             FROM user_vouchers uv
+             JOIN vouchers v ON uv.voucher_id = v.id
+             WHERE uv.user_id = $1`,
+            [userId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Error fetching user vouchers:", err);
+        res.status(500).json({ error: "Failed to fetch vouchers" });
+    }
+});
+
+app.patch('/api/user-vouchers/:voucherId', async (req, res) => {
+    const { voucherId } = req.params;
+    const { is_active } = req.body;
+    const userId = req.query.userId;
+    
+    if (is_active === undefined || !userId) {
+        return res.status(400).json({ error: "Missing parameters" });
+    }
+
+    try {
+        const result = await db.query(
+            'UPDATE user_vouchers SET is_active = $1 WHERE id = $2 AND user_id = $3 RETURNING *',
+            [is_active, voucherId, userId]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Voucher not found" });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("Error updating voucher:", err);
+        res.status(500).json({ error: "Failed to update voucher" });
+    }
+});
+
+
+app.get('/api/product-sustainability/:productId', async (req, res) => {
+    const { productId } = req.params;
+
+    try {
+        const result = await db.query(
+            'SELECT score, analysis_text FROM product_sustainability WHERE product_id = $1',
+            [productId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Sustainability score not found" });
+        }
+
+        res.json({
+            score: result.rows[0].score,
+            analysis: result.rows[0].analysis_text
+        });
+    } catch (err) {
+        console.error("Error fetching sustainability score:", err);
+        res.status(500).json({ error: "Failed to fetch sustainability score" });
+    }
+});
+
+app.post('/api/analyze-all-products-sustainability', async (req, res) => {
+    try {
+        // Get all products without sustainability scores
+        const productsResult = await db.query(`
+            SELECT mp.* FROM marketplaceproducts mp
+            LEFT JOIN product_sustainability ps ON mp.id = ps.product_id
+            WHERE ps.product_id IS NULL AND mp.status != 'sold'
+        `);
+
+        const products = productsResult.rows;
+        let analyzed = 0;
+
+        for (const product of products) {
+            try {
+                const sustainabilityData = await analyzeSustainabilityByText(
+                    product.title, 
+                    product.description
+                );
+
+                if (sustainabilityData && sustainabilityData.score) {
+                    await db.query(
+                        `INSERT INTO product_sustainability (product_id, score, analysis_text)
+                         VALUES ($1, $2, $3)`,
+                        [product.id, sustainabilityData.score, sustainabilityData.analysis]
+                    );
+                    analyzed++;
+                }
+            } catch (err) {
+                console.error(`Failed to analyze product ${product.id}:`, err);
+            }
+        }
+
+        res.json({ 
+            message: `Analyzed ${analyzed} out of ${products.length} products`,
+            totalAnalyzed: analyzed 
+        });
+    } catch (err) {
+        console.error("Error in bulk analysis:", err);
+        res.status(500).json({ error: "Failed to analyze products" });
+    }
+});
+
+
+// ===========================================
 
 // =================================================================
 //  ===> PRODUCT & VARIANT CRUD OPERATIONS (NEWEST SCHEMA) <===

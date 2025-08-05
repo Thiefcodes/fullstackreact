@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 
 const MyPurchases = () => {
+    const [points, setPoints] = useState(0);
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const userId = localStorage.getItem('userId');
@@ -25,6 +26,20 @@ const MyPurchases = () => {
         fetchOrders();
     }, [userId]);
 
+    useEffect(() => {
+        const fetchPoints = async () => {
+            if (userId) {
+                try {
+                    const response = await axios.get(`http://localhost:5000/api/user-points/${userId}`);
+                    setPoints(response.data.points);
+                } catch (err) {
+                    console.error("Error fetching points:", err);
+                }
+            }
+        };
+        fetchPoints();
+    }, [userId]);
+
     if (loading) return <p>Loading your purchases...</p>;
     if (!userId) return <p>Please log in to see your purchases.</p>;
 
@@ -44,6 +59,15 @@ const MyPurchases = () => {
     return (
         <div style={{ maxWidth: '900px', margin: '0 auto', padding: '20px' }}>
             <h1>My Purchases</h1>
+            <div style={{ 
+                    backgroundColor: '#4CAF50',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '20px',
+                    fontWeight: 'bold'
+                }}>
+                    Sustainability Points: {points}
+            </div>
             {orders.length > 0 ? (
                 orders.map(order => {
                     const status = getOrderStatus(order);

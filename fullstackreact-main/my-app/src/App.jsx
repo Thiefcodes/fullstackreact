@@ -19,10 +19,12 @@ import MarketplacePage   from './pages/MarketplacePage';
 import CreateProductPage from './pages/CreateProductPage';
 import CartPage          from './Pages/CartPage';
 import PublicUserProfile from './Pages/PublicUserProfile';
-import CheckoutPage      from './Pages/CheckoutPage';
+import CheckoutPage      from './pages/CheckoutPage';
 import MyPurchases       from './pages/MyPurchases'; 
 import OrderDelivery     from './pages/OrderDelivery'; 
 import MyListings        from './Pages/MyListings';
+import VoucherRedemption from './pages/VoucherRedemption';
+import MyVouchers from './pages/MyVouchers';
 // Your New Pages
 import EcommercePage       from './pages/EcommercePage';
 import ProductDetailsPage  from './pages/ProductDetailsPage';
@@ -95,6 +97,9 @@ const App = () => {
                       <Link to="/marketplace" className="navbar-link" onClick={() => setOpenDropdown(null)}>
                           Marketplace
                       </Link>
+                      <Link to="/redeem-vouchers" className="navbar-link" onClick={() => setOpenDropdown(null)}>
+                          Redeem Vouchers
+                      </Link>
 
                       {/* Selling Dropdown */}
                       <div className="dropdown" onMouseEnter={() => setOpenDropdown('selling')} onMouseLeave={() => setOpenDropdown(null)}>
@@ -103,6 +108,7 @@ const App = () => {
                               <div className="dropdown-content">
                                   <Link to="/products/new" onClick={() => setOpenDropdown(null)}>List an Item</Link>
                                   <Link to="/listings" onClick={() => setOpenDropdown(null)}>My Listings</Link>
+                                  <Link to="/my-vouchers" onClick={() => setOpenDropdown(null)}>My Vouchers</Link>
                               </div>
                           )}
                       </div> 
@@ -180,6 +186,8 @@ const App = () => {
         <Route path="/purchases"       element={<MyPurchases />} /> 
         <Route path="/orders/:orderId" element={<OrderDelivery />} /> 
         <Route path="/listings"        element={<MyListings />} />
+        <Route path="/redeem-vouchers" element={<VoucherRedemption />} />
+        <Route path="/my-vouchers" element={<MyVouchers />} />
 
         {/* Admin / Staff */}
         <Route path="/usermanagement"   element={<UserManagement />} />
