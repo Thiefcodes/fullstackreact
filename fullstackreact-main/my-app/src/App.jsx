@@ -24,10 +24,10 @@ import CheckoutPage        from './Pages/CheckoutPage';
 import MyPurchases     from './pages/MyPurchases';
 import OrderDelivery       from './pages/OrderDelivery';
 import MyListings          from './Pages/MyListings';
-// Your New Pages
 import EcommercePage       from './pages/EcommercePage';
 import ProductDetailsPage  from './pages/ProductDetailsPage';
 import WishlistPage         from './pages/WishlistPage';
+import OrderSuccessPage from './Pages/OrderSuccessPage';
 // Admin / Staff
 import UserManagement     from './pages/UserManagement';
 import ProductManagement   from './Pages/ProductManagement';
@@ -204,6 +204,7 @@ const App = () => {
           <Route path="/purchases"         element={<MyPurchases />} />
           <Route path="/orders/:orderId"   element={<OrderDelivery />} />
           <Route path="/listings"             element={<MyListings />} />
+          <Route path="/order-success" element={<OrderSuccessPage />} />
 
           {/* Admin / Staff */}
           <Route path="/admin/dashboard"   element={<AdminPage />} />

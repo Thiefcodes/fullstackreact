@@ -9,6 +9,12 @@ const nodemailer = require('nodemailer');
 const { WebSocketServer } = require('ws');
 const fs = require('fs');
 const path = require('path');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const paypal = require('@paypal/checkout-server-sdk');
+const pdfkit = require('pdfkit');
+
+const environment = new paypal.core.SandboxEnvironment(process.env.PAYPAL_CLIENT_ID, process.env.PAYPAL_CLIENT_SECRET);
+const paypalClient = new paypal.core.PayPalHttpClient(environment);
 
 app.use(cors());
 app.use(express.json());
@@ -222,6 +228,39 @@ const unifiedStorage = multer.diskStorage({
     }
 });
 const unifiedUpload = multer({ storage: unifiedStorage });
+
+const generateReceiptPdf = (orderId, orderDetails, callback) => {
+    const doc = new pdfkit({ size: 'A4', margin: 50 });
+    const filePath = path.join(__dirname, 'invoices', `receipt-${orderId}.pdf`);
+
+    if (!fs.existsSync(path.join(__dirname, 'invoices'))) {
+        fs.mkdirSync(path.join(__dirname, 'invoices'));
+    }
+
+    doc.pipe(fs.createWriteStream(filePath));
+
+    doc.fontSize(20).text('EcoThrift Receipt', { align: 'center' });
+    doc.fontSize(10).text(`Order ID: ${orderId}`, { align: 'center' });
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, { align: 'center' });
+    doc.moveDown(2);
+
+    doc.fontSize(14).text('Order Summary', { underline: true });
+    doc.moveDown();
+
+    orderDetails.items.forEach(item => {
+        doc.fontSize(12).text(`${item.name} (Size: ${item.size})`);
+        doc.fontSize(10).text(`$${parseFloat(item.displayPrice).toFixed(2)}`, { align: 'right' });
+        doc.moveDown(0.5);
+    });
+    
+    doc.moveDown();
+    doc.fontSize(12).text(`Subtotal: $${orderDetails.subtotal.toFixed(2)}`, { align: 'right' });
+    doc.text(`Shipping: $${orderDetails.shippingFee.toFixed(2)}`, { align: 'right' });
+    doc.fontSize(14).font('Helvetica-Bold').text(`Total: $${orderDetails.totalPrice}`, { align: 'right' });
+    
+    doc.end();
+    callback(filePath);
+};
 
 app.use('/uploads', express.static('uploads'));
 
@@ -1025,6 +1064,7 @@ app.delete('/api/cart/:userId/:productId', async (req, res) => {
  */
 app.post('/api/orders', async (req, res) => {
     const { userId, items, totalPrice, deliveryMethod, shippingFee } = req.body;
+    const subtotal = items.reduce((total, item) => total + parseFloat(item.displayPrice), 0);
     
     if (!userId || !items || items.length === 0) {
         return res.status(400).json({ error: 'Missing required order information.' });
@@ -1080,8 +1120,35 @@ app.post('/api/orders', async (req, res) => {
 
         await client.query('COMMIT'); // COMMIT THE TRANSACTION
         
+        generateReceiptPdf(newOrderId, { items, subtotal, shippingFee, totalPrice }, async (filePath) => {
+            try {
+                const userRes = await db.query('SELECT email FROM users WHERE id = $1', [userId]);
+                const userEmail = userRes.rows[0].email;
+
+                const mailOptions = {
+                    from: process.env.EMAIL_USER,
+                    to: userEmail,
+                    subject: `Your EcoThrift Order Receipt #${newOrderId}`,
+                    text: `Thank you for your order! Your receipt is attached.`,
+                    attachments: [{
+                        filename: `receipt-${newOrderId}.pdf`,
+                        path: filePath,
+                        contentType: 'application/pdf'
+                    }]
+                };
+
+                await transporter.sendMail(mailOptions);
+                console.log(`Receipt sent to ${userEmail}`);
+            } catch (err) {
+                console.error("Error sending receipt email:", err);
+            }
+        });
+
         simulateDelivery(newOrderId); // This function from your teammate's code can remain
         res.status(201).json({ message: 'Order created successfully!', orderId: newOrderId });
+
+        const receiptUrl = `${req.protocol}://${req.get('host')}/invoices/receipt-${newOrderId}.pdf`;
+        res.status(201).json({ message: 'Order created successfully!', orderId: newOrderId, receiptUrl });
 
     } catch (err) {
         await client.query('ROLLBACK'); // If anything fails, undo all changes
@@ -1093,6 +1160,7 @@ app.post('/api/orders', async (req, res) => {
     }
 });
 
+app.use('/invoices', express.static(path.join(__dirname, 'invoices')));
 
 /**
  * @route   GET /api/orders/:userId
@@ -1953,6 +2021,66 @@ app.delete('/api/shop/cart/:userId/:variantId', async (req, res) => {
     } catch (err) {
         console.error('Error removing from shop cart:', err.message);
         res.status(500).json({ error: 'Server error while removing from shop cart.' });
+    }
+});
+
+app.post('/api/create-payment-intent', async (req, res) => {
+    const { items, deliveryMethod } = req.body;
+    const SHIPPING_FEE = 5.00;
+
+    const subtotal = items.reduce((total, item) => total + parseFloat(item.displayPrice), 0);
+    const shippingFee = deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0;
+    const totalAmount = Math.round((subtotal + shippingFee) * 100); 
+
+    try {
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: totalAmount,
+            currency: 'sgd', 
+        });
+        res.send({ clientSecret: paymentIntent.client_secret });
+    } catch (e) {
+        res.status(400).send({ error: { message: e.message } });
+    }
+});
+
+app.post('/api/paypal/create-order', async (req, res) => {
+    const { items, deliveryMethod } = req.body;
+    const SHIPPING_FEE = 5.00;
+
+    const subtotal = items.reduce((total, item) => total + parseFloat(item.displayPrice), 0);
+    const shippingFee = deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0;
+    const totalAmount = (subtotal + shippingFee).toFixed(2);
+
+    const request = new paypal.orders.OrdersCreateRequest();
+    request.prefer("return=representation");
+    request.requestBody({
+        intent: 'CAPTURE',
+        purchase_units: [{
+            amount: {
+                currency_code: 'USD',
+                value: totalAmount,
+            },
+        }],
+    });
+
+    try {
+        const order = await paypalClient.execute(request);
+        res.status(200).json({ orderID: order.result.id });
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
+app.post('/api/paypal/capture-order', async (req, res) => {
+    const { orderID } = req.body;
+    const request = new paypal.orders.OrdersCaptureRequest(orderID);
+    request.requestBody({});
+
+    try {
+        const capture = await paypalClient.execute(request);
+        res.status(200).json({ capture });
+    } catch (err) {
+        res.status(500).send(err.message);
     }
 });
 

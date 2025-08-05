@@ -139,8 +139,8 @@ const EcommercePage = () => {
 
     return (
         <div className="ecommerce-container">
-            <aside className="sidebar">
-                <nav className="sidebar-nav">
+            <aside className="sidebar1">
+                <nav className="sidebar-nav1">
                     <ul>
                         <li><Link to="/shop/all">Shop All</Link></li>
                         <li>
@@ -148,7 +148,7 @@ const EcommercePage = () => {
                                 Shop Men's <span className={`arrow ${isMensOpen ? 'down' : 'right'}`}></span>
                             </button>
                             {isMensOpen && (
-                                <ul className="submenu">
+                                <ul className="submenu1">
                                     <li><Link to="/shop/mens/t-shirts">T-Shirts</Link></li>
                                     <li><Link to="/shop/mens/shirts-polos">Shirts & Polo Shirts</Link></li>
                                 </ul>
@@ -159,7 +159,7 @@ const EcommercePage = () => {
                                 Shop Women's <span className={`arrow ${isWomensOpen ? 'down' : 'right'}`}></span>
                             </button>
                             {isWomensOpen && (
-                                <ul className="submenu">
+                                <ul className="submenu1">
                                     <li><Link to="/shop/womens/t-shirts">T-Shirts</Link></li>
                                     <li><Link to="/shop/womens/dresses-skirts">Dresses & Skirts</Link></li>
                                 </ul>
@@ -170,7 +170,7 @@ const EcommercePage = () => {
                                 Accessories <span className={`arrow ${isAccessoriesOpen ? 'down' : 'right'}`}></span>
                             </button>
                             {isAccessoriesOpen && (
-                                <ul className="submenu">
+                                <ul className="submenu1">
                                     <li><Link to="/shop/accessories/hats">Hats</Link></li>
                                 </ul>
                             )}
