@@ -12,6 +12,7 @@ const path = require('path');
 const { analyzeSustainability, analyzeSustainabilityByText } = require('./gemini');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const paypal = require('@paypal/checkout-server-sdk');
+const pdfkit = require('pdfkit');
 
 const broadcast = (data) => {
     wss.clients.forEach((client) => {
@@ -240,37 +241,45 @@ const unifiedStorage = multer.diskStorage({
 });
 const unifiedUpload = multer({ storage: unifiedStorage });
 
-const generateReceiptPdf = (orderId, orderDetails, callback) => {
-    const doc = new pdfkit({ size: 'A4', margin: 50 });
-    const filePath = path.join(__dirname, 'invoices', `receipt-${orderId}.pdf`);
+const generateReceiptPdf = (orderId, orderDetails) => {
+    return new Promise((resolve, reject) => {
+        const doc = new pdfkit({ size: 'A4', margin: 50 });
+        const invoicesDir = path.join(__dirname, 'invoices');
+        
+      
+        if (!fs.existsSync(invoicesDir)) {
+            fs.mkdirSync(invoicesDir);
+        }
+        
+        const filePath = path.join(invoicesDir, `receipt-${orderId}.pdf`);
+        const stream = fs.createWriteStream(filePath);
 
-    if (!fs.existsSync(path.join(__dirname, 'invoices'))) {
-        fs.mkdirSync(path.join(__dirname, 'invoices'));
-    }
+        doc.pipe(stream);
 
-    doc.pipe(fs.createWriteStream(filePath));
+        doc.fontSize(20).text('EcoThrift Receipt', { align: 'center' });
+        doc.fontSize(10).text(`Order ID: ${orderId}`, { align: 'center' });
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, { align: 'center' });
+        doc.moveDown(2);
 
-    doc.fontSize(20).text('EcoThrift Receipt', { align: 'center' });
-    doc.fontSize(10).text(`Order ID: ${orderId}`, { align: 'center' });
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, { align: 'center' });
-    doc.moveDown(2);
+        doc.fontSize(14).text('Order Summary', { underline: true });
+        doc.moveDown();
 
-    doc.fontSize(14).text('Order Summary', { underline: true });
-    doc.moveDown();
+        orderDetails.items.forEach(item => {
+            doc.fontSize(12).text(`${item.name} (Size: ${item.size})`);
+            doc.fontSize(10).text(`$${parseFloat(item.displayPrice).toFixed(2)}`, { align: 'right' });
+            doc.moveDown(0.5);
+        });
+        
+        doc.moveDown();
+        doc.fontSize(12).text(`Subtotal: $${orderDetails.subtotal.toFixed(2)}`, { align: 'right' });
+        doc.text(`Shipping: $${orderDetails.shippingFee.toFixed(2)}`, { align: 'right' });
+        doc.fontSize(14).font('Helvetica-Bold').text(`Total: $${parseFloat(orderDetails.totalPrice).toFixed(2)}`, { align: 'right' });
+        
+        doc.end();
 
-    orderDetails.items.forEach(item => {
-        doc.fontSize(12).text(`${item.name} (Size: ${item.size})`);
-        doc.fontSize(10).text(`$${parseFloat(item.displayPrice).toFixed(2)}`, { align: 'right' });
-        doc.moveDown(0.5);
+        stream.on('finish', () => resolve(filePath));
+        stream.on('error', reject);
     });
-    
-    doc.moveDown();
-    doc.fontSize(12).text(`Subtotal: $${orderDetails.subtotal.toFixed(2)}`, { align: 'right' });
-    doc.text(`Shipping: $${orderDetails.shippingFee.toFixed(2)}`, { align: 'right' });
-    doc.fontSize(14).font('Helvetica-Bold').text(`Total: $${orderDetails.totalPrice}`, { align: 'right' });
-    
-    doc.end();
-    callback(filePath);
 };
 
 app.use('/uploads', express.static('uploads'));
@@ -1117,7 +1126,6 @@ app.delete('/api/cart/:userId/:productId', async (req, res) => {
  */
 app.post('/api/orders', async (req, res) => {
     const { userId, items, totalPrice, deliveryMethod, shippingFee } = req.body;
-    const subtotal = items.reduce((total, item) => total + parseFloat(item.displayPrice), 0);
     
     if (!userId || !items || items.length === 0) {
         return res.status(400).json({ error: 'Missing required order information.' });
@@ -1128,7 +1136,6 @@ app.post('/api/orders', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // Create order
         const orderQuery = `
             INSERT INTO orders (buyer_id, total_price, delivery_method, shipping_fee, user_order_id)
             VALUES ($1, $2, $3, $4, (SELECT COUNT(*) FROM orders WHERE buyer_id = $1) + 1)
@@ -1137,77 +1144,84 @@ app.post('/api/orders', async (req, res) => {
         const orderResult = await client.query(orderQuery, [userId, totalPrice, deliveryMethod, shippingFee]);
         const newOrderId = orderResult.rows[0].id;
 
-        // Process items and track sustainability points
         let totalSustainabilityPoints = 0;
-
         for (const item of items) {
-            // Insert order item
             const orderItemQuery = `
                 INSERT INTO order_items (order_id, purchased_item_id, item_type, price_at_purchase)
                 VALUES ($1, $2, $3, $4);
             `;
             await client.query(orderItemQuery, [newOrderId, item.id, item.type, item.price]);
 
-            // Update inventory based on item type
             if (item.type === 'marketplace') {
-                const updateMarketplaceQuery = `
-                    UPDATE marketplaceproducts SET status = 'sold' WHERE id = $1 AND status = 'available';
-                `;
+                const updateMarketplaceQuery = `UPDATE marketplaceproducts SET status = 'sold' WHERE id = $1 AND status = 'available';`;
                 const result = await client.query(updateMarketplaceQuery, [item.id]);
                 if (result.rowCount === 0) throw new Error(`Marketplace item "${item.name}" is no longer available.`);
-                
                 await client.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id = $2', [userId, item.id]);
-
-                // Get sustainability score for this product
-                const sustainabilityResult = await client.query(
-                    'SELECT score FROM product_sustainability WHERE product_id = $1',
-                    [item.id]
-                );
                 
+                const sustainabilityResult = await client.query('SELECT score FROM product_sustainability WHERE product_id = $1', [item.id]);
                 if (sustainabilityResult.rows.length > 0) {
-                    const score = sustainabilityResult.rows[0].score;
-                    // Award points based on score (e.g., score * 10)
-                    totalSustainabilityPoints += score * 10;
+                    totalSustainabilityPoints += sustainabilityResult.rows[0].score * 10;
                 }
-
             } else if (item.type === 'shop') {
-                const updateShopQuery = `
-                    UPDATE product_variants SET stock_amt = stock_amt - 1 WHERE id = $1 AND stock_amt > 0;
-                `;
+                const updateShopQuery = `UPDATE product_variants SET stock_amt = stock_amt - 1 WHERE id = $1 AND stock_amt > 0;`;
                 const result = await client.query(updateShopQuery, [item.id]);
                 if (result.rowCount === 0) throw new Error(`Shop item "${item.name} (${item.size})" is out of stock.`);
-
                 await client.query('DELETE FROM shop_cart_items WHERE user_id = $1 AND variant_id = $2', [userId, item.id]);
             }
         }
 
-        // Award sustainability points if any were earned
         if (totalSustainabilityPoints > 0) {
-            await client.query(
-                `INSERT INTO user_sustainability_points (user_id, points)
-                 VALUES ($1, $2)
-                 ON CONFLICT (user_id) DO UPDATE SET points = user_sustainability_points.points + $2`,
-                [userId, totalSustainabilityPoints]
-            );
-            
-            await client.query(
-                `INSERT INTO sustainability_points_history (user_id, points_change, reason, order_id)
-                 VALUES ($1, $2, $3, $4)`,
-                [userId, totalSustainabilityPoints, 'Points earned from sustainable purchase', newOrderId]
-            );
+            await client.query(`INSERT INTO user_sustainability_points (user_id, points) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET points = user_sustainability_points.points + $2`, [userId, totalSustainabilityPoints]);
+            await client.query(`INSERT INTO sustainability_points_history (user_id, points_change, reason, order_id) VALUES ($1, $2, $3, $4)`, [userId, totalSustainabilityPoints, 'Points earned from sustainable purchase', newOrderId]);
         }
 
         await client.query('COMMIT');
         
-        simulateDelivery(newOrderId);
+        // --- START: PDF Generation and Emailing Logic ---
+        
+        // 1. Get user's email for the receipt
+        const userResult = await client.query('SELECT email FROM users WHERE id = $1', [userId]);
+        const userEmail = userResult.rows[0]?.email;
+
+        // 2. Prepare details for PDF and generate it
+        const subtotal = items.reduce((total, item) => total + parseFloat(item.displayPrice), 0);
+        const receiptPath = await generateReceiptPdf(newOrderId, { items, subtotal, shippingFee, totalPrice });
+
+        // 3. Send email with PDF attachment (if email exists)
+        if (userEmail) {
+            const mailOptions = {
+                from: process.env.EMAIL_USER,
+                to: userEmail,
+                subject: `Your EcoThrift Order Receipt #${newOrderId}`,
+                text: 'Thank you for your purchase! Please find your receipt attached.',
+                attachments: [{
+                    filename: `receipt-${newOrderId}.pdf`,
+                    path: receiptPath,
+                    contentType: 'application/pdf'
+                }]
+            };
+            // Send email but don't wait for it. Let it run in the background.
+            // Log errors but don't let it crash the main request.
+            transporter.sendMail(mailOptions).catch(err => {
+                console.error(`Failed to send receipt email for order ${newOrderId}:`, err);
+            });
+        } else {
+            console.warn(`Could not find email for user ID ${userId} to send receipt.`);
+        }
+
+        // --- END: PDF and Emailing Logic ---
+
+        // 4. Send the SINGLE, correct response to the frontend
+        const receiptUrl = `${req.protocol}://${req.get('host')}/invoices/receipt-${newOrderId}.pdf`;
         res.status(201).json({ 
             message: 'Order created successfully!', 
             orderId: newOrderId,
-            sustainabilityPointsEarned: totalSustainabilityPoints 
+            sustainabilityPointsEarned: totalSustainabilityPoints,
+            receiptUrl: receiptUrl // Include the URL for the success page
         });
 
-        const receiptUrl = `${req.protocol}://${req.get('host')}/invoices/receipt-${newOrderId}.pdf`;
-        res.status(201).json({ message: 'Order created successfully!', orderId: newOrderId, receiptUrl });
+        // 5. Simulate delivery process in the background
+        simulateDelivery(newOrderId);
 
     } catch (err) {
         await client.query('ROLLBACK');
@@ -2430,6 +2444,34 @@ app.post('/api/paypal/capture-order', async (req, res) => {
         res.status(200).json({ capture });
     } catch (err) {
         res.status(500).send(err.message);
+    }
+});
+
+app.put('/api/users/:id/address', async (req, res) => {
+    const { id } = req.params;
+    const { address, postalCode, country } = req.body;
+
+    if (!address || !postalCode || !country) {
+        return res.status(400).json({ error: 'Address, postal code, and country are required.' });
+    }
+
+    try {
+        const result = await db.query(
+            `UPDATE users 
+             SET address = $1, postal_code = $2, country = $3 
+             WHERE id = $4 
+             RETURNING id, address, postal_code, country`,
+            [address, postalCode, country, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+
+        res.status(200).json({ message: 'Address updated successfully.', user: result.rows[0] });
+    } catch (err) {
+        console.error('Error updating user address:', err);
+        res.status(500).json({ error: 'Server error while updating address.' });
     }
 });
 

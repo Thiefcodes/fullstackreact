@@ -203,6 +203,7 @@ const App = () => {
           <Route path="/editprofile"       element={<EditProfile />} />
           <Route path="/changepassword"       element={<ChangePassword />} />
          <Route path="/mixandmatch"            element={<MixAndMatch />} />
+          <Route path="/order-success"   element={<OrderSuccessPage />} />
 
           {/* Admin / Staff */}
           <Route path="/admin/dashboard"   element={<AdminPage />} />
