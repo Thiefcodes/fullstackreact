@@ -139,21 +139,41 @@ const App = () => {
                   )}
 
                   {/* Staff Navbar */}
-                  {isLoggedIn && userType === 'Staff' && (
-                      <>
-                          <div className="navbar-group">
-                              <Link to="/admin/dashboard" className="navbar-link">Dashboard</Link>
-                              <Link to="/products" className="navbar-link">Manage Products</Link>
-                              <Link to="/inventory" className="navbar-link">Manage Inventory</Link>
-                              <Link to="/usermanagement" className="navbar-link">Manage Users</Link>
-                              <Link to="/approvallisting" className="navbar-link">Approve Listings</Link>
-                              <Link to="/AdminScan" className="navbar-link">Admin scan dont remove this</Link>
-                          </div>
-                          <div className="navbar-auth">
-                              <button className="logout-btn" onClick={handleLogout}>Logout</button>
-                          </div>
-                      </>
-                  )}
+                  {isLoggedIn && userType === 'Staff' && (
+                      <>
+                          <div className="navbar-group">
+                              <Link to="/admin/dashboard" className="navbar-link" onClick={() => setOpenDropdown(null)}>
+                                  Dashboard
+                              </Link>
+
+                              {/* Manage Dropdown */}
+                              <div
+                                  className="dropdown"
+                                  onMouseEnter={() => setOpenDropdown('manage')}
+                                  onMouseLeave={() => setOpenDropdown(null)}
+                              >
+                                  <a href="#" className="dropbtn" onClick={e => e.preventDefault()}>Manage</a>
+                                  {openDropdown === 'manage' && (
+                                      <div className="dropdown-content">
+                                          <Link to="/products" onClick={() => setOpenDropdown(null)}>Manage Products</Link>
+                                          <Link to="/inventory" onClick={() => setOpenDropdown(null)}>Manage Inventory</Link>
+                                          <Link to="/usermanagement" onClick={() => setOpenDropdown(null)}>Manage Users</Link>
+                                      </div>
+                                  )}
+                              </div>
+
+                              <Link to="/approvallisting" className="navbar-link" onClick={() => setOpenDropdown(null)}>
+                                  Approve Listings
+                              </Link>
+                              <Link to="/AdminScan" className="navbar-link" onClick={() => setOpenDropdown(null)}>
+                                  Admin scan dont remove this
+                              </Link>
+                          </div>
+                          <div className="navbar-auth">
+                              <button className="logout-btn" onClick={handleLogout}>Logout</button>
+                          </div>
+                      </>
+                  )}
           </nav>
 
           {/* Login and Register Modals */}
