@@ -1,10 +1,5 @@
-<<<<<<< HEAD
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-=======
-import React, { useState, useEffect, useMemo } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
->>>>>>> 2cf39ce890d750b926fa51ecbe31a1d3079002ce
 import axios from 'axios';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -273,7 +268,6 @@ const CheckoutPage = () => {
                     </div>
                 )}
 
-<<<<<<< HEAD
                 <div style={{ marginTop: '30px' }}>
                     <h3>Apply Voucher</h3>
                     {voucherLoading ? (
@@ -338,8 +332,6 @@ const CheckoutPage = () => {
                 <button onClick={handlePayNow} disabled={isProcessing} style={{ width: '100%', padding: '15px', marginTop: '30px', background: 'green', color: 'white', border: 'none', fontSize: '1.2em', cursor: 'pointer' }}>
                     {isProcessing ? 'Processing...' : 'Pay Now'}
                 </button>
-=======
->>>>>>> 2cf39ce890d750b926fa51ecbe31a1d3079002ce
             </div>
         </div>
     );

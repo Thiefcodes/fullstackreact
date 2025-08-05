@@ -104,6 +104,10 @@ const App = () => {
                               Marketplace
                           </Link>
 
+                            <Link to="/redeem-vouchers" className="navbar-link" onClick={() => setOpenDropdown(null)}>
+                              Voucher Redemption
+                          </Link>
+
                           {/* Selling Dropdown */}
                           <div className="dropdown" onMouseEnter={() => setOpenDropdown('selling')} onMouseLeave={() => setOpenDropdown(null)}>
                               <a href="#" className="dropbtn" ref={sellingBtnRef} onClick={e => e.preventDefault()}>Selling</a>
