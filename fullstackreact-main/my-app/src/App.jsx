@@ -20,6 +20,7 @@ import MarketplacePage   from './pages/MarketplacePage';
 import CreateProductPage from './pages/CreateProductPage';
 import CartPage            from './Pages/CartPage';
 import PublicUserProfile from './Pages/PublicUserProfile';
+<<<<<<< HEAD
 
 import CheckoutPage      from './pages/CheckoutPage';
 import MyPurchases       from './pages/MyPurchases'; 
@@ -29,9 +30,16 @@ import VoucherRedemption from './pages/VoucherRedemption';
 import MyVouchers from './pages/MyVouchers';
 
 // Your New Pages
+=======
+import CheckoutPage        from './Pages/CheckoutPage';
+import MyPurchases     from './pages/MyPurchases';
+import OrderDelivery       from './pages/OrderDelivery';
+import MyListings          from './Pages/MyListings';
+>>>>>>> 2cf39ce890d750b926fa51ecbe31a1d3079002ce
 import EcommercePage       from './pages/EcommercePage';
 import ProductDetailsPage  from './pages/ProductDetailsPage';
 import WishlistPage         from './pages/WishlistPage';
+import OrderSuccessPage from './Pages/OrderSuccessPage';
 // Admin / Staff
 import UserManagement     from './pages/UserManagement';
 import ProductManagement   from './Pages/ProductManagement';
@@ -199,6 +207,21 @@ const App = () => {
           <Route path="/changepassword"       element={<ChangePassword />} />
          <Route path="/mixandmatch"            element={<MixAndMatch />} />
 
+<<<<<<< HEAD
+=======
+      {/* Team */}
+          <Route path="/marketplace"       element={<MarketplacePage />} />
+          <Route path="/products/new"     element={<CreateProductPage />} />
+          <Route path="/cart"                 element={<CartPage />} />
+          <Route path="/checkout"             element={<CheckoutPage />} />
+          <Route path="/users/:userId"     element={<ViewUserProfile />} />
+          <Route path="/user/:userId"         element={<PublicUserProfile />} />
+          <Route path="/purchases"         element={<MyPurchases />} />
+          <Route path="/orders/:orderId"   element={<OrderDelivery />} />
+          <Route path="/listings"             element={<MyListings />} />
+          <Route path="/order-success" element={<OrderSuccessPage />} />
+
+>>>>>>> 2cf39ce890d750b926fa51ecbe31a1d3079002ce
           {/* Admin / Staff */}
           <Route path="/admin/dashboard"   element={<AdminPage />} />
           <Route path="/admin/analysis"    element={<AnalPage />} />
