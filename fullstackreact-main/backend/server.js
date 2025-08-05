@@ -927,7 +927,7 @@ app.post('/api/marketplaceproducts', async (req, res) => {
  * @access  Public
  */
 app.get('/api/marketplaceproducts', async (req, res) => {
-    const { excludeUserId, status, seller_id, category } = req.query;
+    const { excludeUserId, status, seller_id, category, search } = req.query;
 
     try {
         let getProductsQuery;
@@ -961,7 +961,10 @@ app.get('/api/marketplaceproducts', async (req, res) => {
             queryParams.push(category);
         }
 
-
+        if (search) {
+    whereClauses.push(`p.title ILIKE $${queryParams.length + 1}`);
+    queryParams.push(`%${search}%`);
+}
 
 
         getProductsQuery = `
