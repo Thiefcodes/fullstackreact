@@ -1373,14 +1373,33 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
  */
 app.get('/api/listings/:userId', async (req, res) => {
     const { userId } = req.params;
+    // Get the optional 'status' from the query parameters (e.g., ?status=available)
+    const { status } = req.query;
+
     try {
-        const query = `
-            SELECT * FROM marketplaceproducts
-            WHERE seller_id = $1
-            ORDER BY created_at DESC;
-        `;
-        // We use parseInt here as a good practice to ensure the ID is a number.
-        const { rows } = await db.query(query, [parseInt(userId, 10)]);
+        let query;
+        const queryParams = [parseInt(userId, 10)];
+
+        // === THIS IS THE FIX ===
+        // We dynamically build the SQL query based on the presence of the 'status' parameter.
+        if (status && status !== 'all') {
+            // If a specific status is requested, add a WHERE clause for it.
+            query = `
+                SELECT * FROM marketplaceproducts
+                WHERE seller_id = $1 AND status = $2
+                ORDER BY created_at DESC;
+            `;
+            queryParams.push(status);
+        } else {
+            // If status is 'all' or not provided, fetch all listings for the user.
+            query = `
+                SELECT * FROM marketplaceproducts
+                WHERE seller_id = $1
+                ORDER BY created_at DESC;
+            `;
+        }
+
+        const { rows } = await db.query(query, queryParams);
         res.status(200).json(rows);
     } catch (err) {
         console.error('Error fetching user listings:', err.message);

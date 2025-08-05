@@ -6,15 +6,20 @@ const MyListings = () => {
     const [loading, setLoading] = useState(true);
     const userId = localStorage.getItem('userId');
 
+    const [filterStatus, setFilterStatus] = useState('all');
+    const filterOptions = ['all', 'available', 'pending', 'sold'];
+
+    // This useEffect hook will now re-run whenever the 'filterStatus' changes.
     useEffect(() => {
         if (!userId) {
             setLoading(false);
             return;
         }
         const fetchListings = async () => {
+            setLoading(true); // Show loading indicator on every filter change
             try {
-                // Call the new backend endpoint we just created.
-                const response = await axios.get(`http://localhost:5000/api/listings/${userId}`);
+                // Append the status to the API call as a query parameter.
+                const response = await axios.get(`http://localhost:5000/api/listings/${userId}?status=${filterStatus}`);
                 setListings(response.data);
             } catch (err) {
                 console.error("Error fetching listings:", err);
@@ -23,7 +28,7 @@ const MyListings = () => {
             }
         };
         fetchListings();
-    }, [userId]);
+    }, [userId, filterStatus]);
 
     // A small, reusable component to render the status badge.
     const StatusBadge = ({ status }) => {
@@ -80,6 +85,27 @@ const MyListings = () => {
         }}>
             My Listings
         </h1>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '30px' }}>
+                {filterOptions.map(status => (
+                    <button
+                        key={status}
+                        onClick={() => setFilterStatus(status)}
+                        style={{
+                            padding: '8px 16px',
+                            border: '1px solid #ddd',
+                            borderRadius: '20px',
+                            cursor: 'pointer',
+                            textTransform: 'capitalize',
+                            backgroundColor: filterStatus === status ? '#15342D' : 'white',
+                            color: filterStatus === status ? 'white' : '#333',
+                            fontWeight: filterStatus === status ? 'bold' : 'normal',
+                            transition: 'all 0.2s ease'
+                        }}
+                    >
+                        {status}
+                    </button>
+                ))}
+            </div>
 
         {listings.length > 0 ? (
             listings.map(item => (
