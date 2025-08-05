@@ -49,17 +49,17 @@ const StripePaymentForm = ({ clientSecret, onSuccessfulPayment }) => {
 const CheckoutPage = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    
     const itemsToCheckout = location.state?.items || [];
 
     const [deliveryMethod, setDeliveryMethod] = useState('Collection');
     const [paymentMethod, setPaymentMethod] = useState('CreditCard');
     const [isProcessing, setIsProcessing] = useState(false);
-
     const [availableVouchers, setAvailableVouchers] = useState([]);
     const [selectedVoucher, setSelectedVoucher] = useState(null);
     const [voucherLoading, setVoucherLoading] = useState(true);
+    const [clientSecret, setClientSecret] = useState('');
 
+    const userId = localStorage.getItem('userId');
     const SHIPPING_FEE = 5.00;
 
     const subtotal = useMemo(() => itemsToCheckout.reduce((total, item) => total + parseFloat(item.displayPrice), 0), [itemsToCheckout]);
@@ -68,18 +68,22 @@ const CheckoutPage = () => {
 
     useEffect(() => {
         const fetchVouchers = async () => {
-            try {
-                const response = await axios.get(`http://localhost:5000/api/user-vouchers/${localStorage.getItem('userId')}`);
-                setAvailableVouchers(response.data.filter(v => v.is_active));
+            if (!userId) {
                 setVoucherLoading(false);
+                return;
+            }
+            try {
+                const response = await axios.get(`http://localhost:5000/api/user-vouchers/${userId}`);
+                setAvailableVouchers(response.data.filter(v => v.is_active));
             } catch (err) {
                 console.error("Error fetching vouchers:", err);
+            } finally {
                 setVoucherLoading(false);
             }
         };
-        
         fetchVouchers();
-    }, []);
+    }, [userId]);
+
     
     // Calculate discount
     const discountAmount = useMemo(() => {
@@ -92,66 +96,45 @@ const CheckoutPage = () => {
         return (subtotal + shippingFee - parseFloat(discountAmount || 0)).toFixed(2);
     }, [subtotal, shippingFee, discountAmount]);
 
-    const [clientSecret, setClientSecret] = useState('');
 
     useEffect(() => {
         if (paymentMethod === 'CreditCard' && itemsToCheckout.length > 0) {
-            axios.post('http://localhost:5000/api/create-payment-intent', { items: itemsToCheckout, deliveryMethod })
-                .then(res => {
-                    setClientSecret(res.data.clientSecret);
-                })
-                .catch(err => {
-                    console.error("Error fetching Stripe client secret:", err);
-                    alert("Could not initialize card payment. Please select another method or try again.");
-                });
+            axios.post('http://localhost:5000/api/create-payment-intent', { 
+                items: itemsToCheckout, 
+                deliveryMethod,
+                voucherId: selectedVoucher ? selectedVoucher.id : null,
+                userId: userId
+            })
+            .then(res => setClientSecret(res.data.clientSecret))
+            .catch(err => {
+                console.error("Error fetching Stripe client secret:", err);
+                alert("Could not initialize card payment. Please select another method or try again.");
+            });
         }
-    }, [itemsToCheckout, deliveryMethod, paymentMethod]);
+    }, [itemsToCheckout, deliveryMethod, paymentMethod, selectedVoucher, userId]);
 
     const completeOrder = async (paymentDetails) => {
-        const userId = localStorage.getItem('userId');
         setIsProcessing(true);
         try {
             const response = await axios.post('http://localhost:5000/api/orders', {
-                userId, items: itemsToCheckout, totalPrice, deliveryMethod, shippingFee, paymentDetails
+                userId, 
+                items: itemsToCheckout, 
+                totalPrice, 
+                deliveryMethod, 
+                shippingFee, 
+                paymentDetails,
+                voucherId: selectedVoucher ? selectedVoucher.id : null // Send voucherId on completion
             });
             alert("Payment successful! Your order has been placed.");
-            // Navigate to a new success page with the order details
             navigate('/order-success', { state: { order: response.data } });
         } catch (err) {
-            alert("Failed to place order.");
+            console.error("Error placing order:", err.response?.data?.error || err.message);
+            alert(err.response?.data?.error || "Failed to place order.");
         } finally {
             setIsProcessing(false);
         }
     };
 
-    const handlePayNow = async () => {
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            alert("Authentication error. Please log in again.");
-            return;
-        }
-        setIsProcessing(true);
-        try {
-            // The itemsToCheckout array now includes the 'type' field,
-            // which the updated backend endpoint requires.
-            await axios.post('http://localhost:5000/api/orders', {
-                userId,
-                items: itemsToCheckout,
-                totalPrice,
-                deliveryMethod,
-                shippingFee
-            });
-            alert("Payment successful! Your order has been placed.");
-            navigate('/purchases'); // This will now work correctly
-        } catch (err) {
-            console.error("Error placing order:", err);
-            // Display the specific error from the backend if available
-            const errorMessage = err.response?.data?.error || "Failed to place order. Please try again.";
-            alert(errorMessage);
-        } finally {
-            setIsProcessing(false);
-        }
-    };
 
     // Redirect back to cart if there are no items to check out.
     if (itemsToCheckout.length === 0) {
@@ -243,12 +226,11 @@ const CheckoutPage = () => {
                     </div>
                 </div>
                 
-                {/* Conditional rendering of payment forms */}
-                {paymentMethod === 'CreditCard' && (
-                    <Elements stripe={stripePromise}>
-                        <StripePaymentForm clientSecret={clientSecret} onSuccessfulPayment={completeOrder} />
-                    </Elements>
-                )}
+            {paymentMethod === 'CreditCard' && (
+                <Elements stripe={stripePromise}>
+                    <StripePaymentForm clientSecret={clientSecret} onSuccessfulPayment={completeOrder} />
+                </Elements>
+)}
 
                 {paymentMethod === 'PayPal' && (
                     <div style={{ marginTop: '20px' }}>
@@ -256,7 +238,12 @@ const CheckoutPage = () => {
                             <PayPalButtons
                                 style={{ layout: "vertical" }}
                                 createOrder={async () => {
-                                    const res = await axios.post('http://localhost:5000/api/paypal/create-order', { items: itemsToCheckout, deliveryMethod });
+                                    const res = await axios.post('http://localhost:5000/api/paypal/create-order', { 
+                                        items: itemsToCheckout, 
+                                        deliveryMethod,
+                                        voucherId: selectedVoucher ? selectedVoucher.id : null,
+                                        userId: userId
+                                    });
                                     return res.data.orderID;
                                 }}
                                 onApprove={async (data) => {
@@ -328,10 +315,6 @@ const CheckoutPage = () => {
                         <p>${totalPrice}</p>
                     </div>
                 </div>
-
-                <button onClick={handlePayNow} disabled={isProcessing} style={{ width: '100%', padding: '15px', marginTop: '30px', background: 'green', color: 'white', border: 'none', fontSize: '1.2em', cursor: 'pointer' }}>
-                    {isProcessing ? 'Processing...' : 'Pay Now'}
-                </button>
             </div>
         </div>
     );
