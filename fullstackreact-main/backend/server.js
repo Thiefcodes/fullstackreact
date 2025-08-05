@@ -1526,6 +1526,91 @@ app.delete('/api/products/:id', async (req, res) => {
     }
 });
 
+app.put('/api/products/:productId/discounts', async (req, res) => {
+    const { productId } = req.params;
+    const { variants } = req.body; // Expects an array of { variant_id, discount_price }
+
+    if (!variants || !Array.isArray(variants)) {
+        return res.status(400).json({ error: 'A valid variants array is required.' });
+    }
+
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+
+        // --- Step 1: Get PRE-UPDATE state for notification logic ---
+        const oldVariantsState = await client.query(
+            'SELECT id, price, discount_price FROM product_variants WHERE product_id = $1', 
+            [productId]
+        );
+        
+        // Check if a discount is being newly applied (was null, now has a price)
+        const wasPreviouslyOnSale = oldVariantsState.rows.some(v => v.discount_price !== null);
+        const isNowOnSale = variants.some(v => v.discount_price !== null && v.discount_price !== '');
+        const shouldSendNotification = !wasPreviouslyOnSale && isNowOnSale;
+
+        // --- Step 2: Update all variants in the database ---
+        for (const variant of variants) {
+            let finalDiscountPrice = null;
+            if (variant.discount_price !== null && variant.discount_price !== undefined && variant.discount_price !== '') {
+                finalDiscountPrice = parseFloat(variant.discount_price);
+            }
+            await client.query(
+                'UPDATE product_variants SET discount_price = $1 WHERE id = $2 AND product_id = $3',
+                [finalDiscountPrice, variant.variant_id, productId]
+            );
+        }
+
+        await client.query('COMMIT');
+        
+        // --- Step 3: Send response to staff immediately ---
+        res.status(200).json({ message: 'Discounts updated successfully.' });
+
+        // --- Step 4: Asynchronous Email Notification Logic (if needed) ---
+        if (shouldSendNotification) {
+            console.log(`New discount applied to product ${productId}. Notifying users...`);
+
+            // Get product name and user emails in parallel
+            const [productInfo, usersToNotify] = await Promise.all([
+                db.query('SELECT product_name FROM products WHERE id = $1', [productId]),
+                db.query('SELECT u.email FROM users u JOIN wishlist_items w ON u.id = w.user_id WHERE w.product_id = $1', [productId])
+            ]);
+
+            if (usersToNotify.rows.length > 0 && productInfo.rows.length > 0) {
+                const productName = productInfo.rows[0].product_name;
+
+                // Find the lowest original price and lowest new discount price to show in the email
+                const originalPrice = Math.min(...oldVariantsState.rows.map(v => parseFloat(v.price)));
+                const newDiscountPrice = Math.min(...variants.filter(v => v.discount_price).map(v => parseFloat(v.discount_price)));
+
+                console.log(`Found ${usersToNotify.rows.length} users. Notifying about "${productName}"...`);
+                
+                for (const user of usersToNotify.rows) {
+                    const mailOptions = {
+                        from: process.env.EMAIL_USER,
+                        to: user.email,
+                        subject: `Price Drop Alert! An item on your wishlist is on sale!`,
+                        html: `
+                            <p>Great news! An item on your EcoThrift wishlist, <strong>${productName}</strong>, is now on sale.</p>
+                            <p>It's now available from just <strong>$${newDiscountPrice.toFixed(2)}</strong> (was $${originalPrice.toFixed(2)}).</p>
+                            <p>Check it out before it's gone!</p>
+                        `
+                    };
+                    transporter.sendMail(mailOptions).catch(err => {
+                        console.error(`Failed to send email to ${user.email}:`, err);
+                    });
+                }
+            }
+        }
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`Error updating discounts for product ${productId}:`, err);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    } finally {
+        client.release();
+    }
+});
 
 // =================================================================
 //  ===> REVIEW CRUD OPERATIONS (Updated for New Schema) <===

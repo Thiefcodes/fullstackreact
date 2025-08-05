@@ -1,10 +1,75 @@
-// src/pages/ProductManagement.jsx
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const API_BASE_URL = 'http://localhost:5000/api/products';
 // No direct image upload from this page, but keeping the correct URL for consistency if needed later
 const IMAGE_UPLOAD_URL = 'http://localhost:5000/api/uploadimage';
+
+const DiscountModal = ({ product, onClose, onSave }) => {
+    const [variants, setVariants] = useState(product.variants || []);
+    const [applyAllDiscount, setApplyAllDiscount] = useState('');
+
+    const handleDiscountChange = (variantId, value) => {
+        setVariants(prev =>
+            prev.map(v => (v.variant_id === variantId ? { ...v, discount_price: value } : v))
+        );
+    };
+
+    const handleApplyToAll = () => {
+        const newPrice = applyAllDiscount === '' ? null : parseFloat(applyAllDiscount);
+        setVariants(prev =>
+            prev.map(v => ({ ...v, discount_price: newPrice }))
+        );
+    };
+
+    const handleSave = async () => {
+        onSave(product.id, variants);
+    };
+
+    return (
+        <div className="modal-backdrop">
+            <div className="modal-content">
+                <h2>Set Discounts for {product.product_name}</h2>
+                
+                {/* NEW "Apply to All" section */}
+                <div className="apply-all-section">
+                    <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Set one price for all sizes..."
+                        value={applyAllDiscount}
+                        onChange={(e) => setApplyAllDiscount(e.target.value)}
+                    />
+                    <button onClick={handleApplyToAll}>Apply to All</button>
+                </div>
+
+                <div className="variants-list">
+                    {variants.map(variant => (
+                        <div key={variant.variant_id} className="variant-row">
+                            <span className="variant-size">Size: {variant.size}</span>
+                            <span className="variant-price">Original Price: ${variant.price}</span>
+                            <div className="discount-input-group">
+                                <label htmlFor={`discount-${variant.variant_id}`}>Discount Price ($):</label>
+                                <input
+                                    id={`discount-${variant.variant_id}`}
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="e.g., 9.99"
+                                    value={variant.discount_price || ''}
+                                    onChange={(e) => handleDiscountChange(variant.variant_id, e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <div className="modal-actions">
+                    <button onClick={handleSave} className="modal-save-btn">Save Discounts</button>
+                    <button onClick={onClose} className="modal-cancel-btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const ProductManagement = () => {
     const location = useLocation();
@@ -25,6 +90,9 @@ const ProductManagement = () => {
 
     // Updated categories to match your new schema - you can modify these based on your actual categories
     const categories = ['Top', 'Shirt', 'Pants', 'Jeans', 'Skirts', 'Shorts', 'Cargo', 'Casual', 'Summer', 'Winter'];
+
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedProduct, setSelectedProduct] = useState(null);
 
     // Determine if the current path matches a sidebar link for active styling
     const isActive = (path) => location.pathname === path;
@@ -188,6 +256,38 @@ const ProductManagement = () => {
         );
     };
 
+    const handleOpenDiscountModal = (product) => {
+        setSelectedProduct(product);
+        setIsModalOpen(true);
+    };
+
+    const handleCloseDiscountModal = () => {
+        setIsModalOpen(false);
+        setSelectedProduct(null);
+    };
+
+    const handleSaveDiscount = async (productId, variantsToSave) => {
+        try {
+            const response = await fetch(`http://localhost:5000/api/products/${productId}/discounts`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ variants: variantsToSave }), // Send the whole array
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to update discounts.');
+            }
+
+            // After a successful save, close the modal and refresh the product list
+            handleCloseDiscountModal();
+            fetchProducts();
+            
+        } catch (err) {
+            console.error(`Error saving discounts for product ${productId}:`, err);
+            setError(`Error: ${err.message}`);
+        }
+    };
+
     // Helper function to get the display price (from variants)
     const getDisplayPrice = (product) => {
         if (product.variants && product.variants.length > 0) {
@@ -216,6 +316,14 @@ const ProductManagement = () => {
 
     return (
         <div className="product-management-container">
+             {isModalOpen && selectedProduct && (
+                <DiscountModal 
+                    product={selectedProduct} 
+                    onClose={handleCloseDiscountModal} 
+                    onSave={handleSaveDiscount}
+                />
+            )}
+
             {/* Sidebar */}
             <aside className="sidebar">
                 <div className="sidebar-logo">EcoThrift</div>
@@ -348,6 +456,12 @@ const ProductManagement = () => {
                                         )}
                                     </div>
                                     <div className="product-actions">
+                                         <button
+                                            onClick={() => handleOpenDiscountModal(product)}
+                                            className="action-button discount-button"
+                                        >
+                                            Set Discount
+                                        </button>
                                         <button
                                             onClick={() => handleEditProductClick(product.id)}
                                             className="action-button edit-button"
@@ -750,7 +864,17 @@ const ProductManagement = () => {
                     gap: 10px;
                     margin-top: auto;
                 }
-               
+
+                .discount-button {
+                    background-color: #f59e0b; /* bg-yellow-500 */
+                    color: #ffffff;
+                    width: 100%; 
+                }
+
+                .discount-button:hover {
+                    background-color: #d97706; /* hover:bg-yellow-600 */
+                }
+
                 .action-button {
                     width: 50%;
                     padding: 10px;
@@ -762,6 +886,7 @@ const ProductManagement = () => {
                     align-items: center;
                     justify-content: center;
                     transition: background-color 0.2s ease-in-out;
+                    margin-bottom: 8px; 
                 }
 
                 .edit-button {
@@ -840,6 +965,96 @@ const ProductManagement = () => {
                   .product-grid {
                     grid-template-columns: 1fr;
                   }
+                }
+                .modal-backdrop {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0, 0, 0, 0.6);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 1000;
+                }
+                .modal-content {
+                    background-color: #fff;
+                    padding: 2rem;
+                    border-radius: 12px;
+                    width: 90%;
+                    max-width: 600px;
+                    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+                }
+                .modal-content h2 {
+                    margin-top: 0;
+                    margin-bottom: 1.5rem;
+                }
+                .variants-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
+                    max-height: 50vh;
+                    overflow-y: auto;
+                    padding-right: 1rem;
+                }
+                .variant-row {
+                    display: grid;
+                    grid-template-columns: 1fr 1.5fr 1.5fr;
+                    align-items: center;
+                    gap: 1rem;
+                    border-bottom: 1px solid #e5e7eb;
+                    padding-bottom: 1rem;
+                }
+                .variant-size { font-weight: 600; }
+                .variant-price { color: #6b7280; }
+                .discount-input-group { display: flex; flex-direction: column; }
+                .discount-input-group label { font-size: 0.8rem; color: #6b7280; }
+                .discount-input-group input {
+                    padding: 0.5rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                }
+                .modal-actions {
+                    display: flex;
+                    justify-content: flex-end;
+                    gap: 1rem;
+                    margin-top: 2rem;
+                }
+                .modal-save-btn, .modal-cancel-btn {
+                    padding: 0.6rem 1.2rem;
+                    border-radius: 8px;
+                    border: none;
+                    font-weight: 600;
+                    cursor: pointer;
+                }
+                .modal-save-btn {
+                    background-color: #10b981;
+                    color: white;
+                }
+                .modal-cancel-btn {
+                    background-color: #e5e7eb;
+                }
+                .apply-all-section {
+                    display: flex;
+                    gap: 0.5rem;
+                    margin-bottom: 1.5rem;
+                    padding-bottom: 1rem;
+                    border-bottom: 1px solid #e5e7eb;
+                }
+                .apply-all-section input {
+                    flex-grow: 1;
+                    padding: 0.5rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                }
+                .apply-all-section button {
+                    padding: 0.5rem 1rem;
+                    border: none;
+                    border-radius: 6px;
+                    background-color: #4f46e5; /* Indigo */
+                    color: white;
+                    cursor: pointer;
                 }
             `}</style>
         </div>
