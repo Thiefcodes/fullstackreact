@@ -167,3 +167,13 @@
     display: flex; justify-content: center; align-items: center;
     height: 80vh; font-size: 1.5rem; color: #4b5563;
 }
+
+.price-display { 
+    display: flex; align-items: baseline; gap: 0.75rem; 
+}
+.discount-price1 { 
+    color: #ef4444; font-size: 1.75rem; font-weight: 600; margin-left: -26rem; 
+}
+.original-price1 {
+     color: #6b7280; text-decoration: line-through; font-size: 1.25rem; 
+}

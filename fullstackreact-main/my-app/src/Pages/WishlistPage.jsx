@@ -247,7 +247,16 @@ const handleAddToCart = (item) => {
                                         </div>
                                     )}
                                     
-                                    <p className="wishlist-item-price">${item.price}</p>
+                                    <div className="price-display">
+                                        {item.discount_price !== null && parseFloat(item.discount_price) < parseFloat(item.price) ? (
+                                            <>
+                                                <span className="discount-price">${parseFloat(item.discount_price).toFixed(2)}</span>
+                                                <span className="original-price">${parseFloat(item.price).toFixed(2)}</span>
+                                            </>
+                                        ) : (
+                                            <p className="wishlist-item-price">${parseFloat(item.price).toFixed(2)}</p>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="wishlist-item-actions">
                                     <button onClick={() => handleAddToCart(item)} className="add-to-cart-btn-wishlist">

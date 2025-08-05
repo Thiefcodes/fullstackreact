@@ -1,10 +1,91 @@
-// src/pages/ProductManagement.jsx
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const API_BASE_URL = 'http://localhost:5000/api/products';
 // No direct image upload from this page, but keeping the correct URL for consistency if needed later
 const IMAGE_UPLOAD_URL = 'http://localhost:5000/api/uploadimage';
+
+const DiscountModal = ({ product, onClose, onSave }) => {
+    // This state is now managed correctly with useEffect
+    const [variants, setVariants] = useState([]);
+    const [applyAllDiscount, setApplyAllDiscount] = useState('');
+
+    // THIS IS A KEY FIX: This effect runs when the modal opens or the product changes,
+    // ensuring the correct, current discount data is always shown.
+    useEffect(() => {
+        setVariants(product.variants || []);
+    }, [product]);
+
+    const handleDiscountChange = (variantId, value) => {
+        setVariants(prev =>
+            prev.map(v => (v.variant_id === variantId ? { ...v, discount_price: value } : v))
+        );
+    };
+
+    const handleApplyToAll = () => {
+        const newPrice = applyAllDiscount;
+        setVariants(prev =>
+            prev.map(v => ({ ...v, discount_price: newPrice }))
+        );
+    };
+    
+    // NEW: Function to remove all discounts
+    const handleRemoveAll = () => {
+        setVariants(prev =>
+            prev.map(v => ({ ...v, discount_price: null }))
+        );
+        setApplyAllDiscount(''); // Clear the apply-all input as well
+    };
+
+    const handleSave = () => {
+        onSave(product.id, variants);
+    };
+
+    return (
+        <div className="modal-backdrop">
+            <div className="modal-content">
+                <h2>{product.variants.some(v => v.discount_price !== null) ? 'Edit' : 'Set'} Discounts for {product.product_name}</h2>
+                
+                <div className="apply-all-section">
+                    <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Set one price for all sizes..."
+                        value={applyAllDiscount}
+                        onChange={(e) => setApplyAllDiscount(e.target.value)}
+                    />
+                    <button onClick={handleApplyToAll}>Apply to All</button>
+                    {/* NEW: Remove All Discounts Button */}
+                    <button onClick={handleRemoveAll} className="remove-all-btn">Remove All</button>
+                </div>
+
+                <div className="variants-list">
+                    {variants.map(variant => (
+                        <div key={variant.variant_id} className="variant-row">
+                            <span className="variant-size">Size: {variant.size}</span>
+                            <span className="variant-price">Original Price: ${variant.price}</span>
+                            <div className="discount-input-group">
+                                <label htmlFor={`discount-${variant.variant_id}`}>Discount Price ($):</label>
+                                <input
+                                    id={`discount-${variant.variant_id}`}
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="None"
+                                    value={variant.discount_price || ''}
+                                    onChange={(e) => handleDiscountChange(variant.variant_id, e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <div className="modal-actions">
+                    <button onClick={handleSave} className="modal-save-btn">Save Discounts</button>
+                    <button onClick={onClose} className="modal-cancel-btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const ProductManagement = () => {
     const location = useLocation();
@@ -26,6 +107,9 @@ const ProductManagement = () => {
     // Updated categories to match your new schema - you can modify these based on your actual categories
     const categories = ['Top', 'Shirt', 'Pants', 'Jeans', 'Skirts', 'Shorts', 'Cargo', 'Casual', 'Summer', 'Winter'];
 
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedProduct, setSelectedProduct] = useState(null);
+
     // Determine if the current path matches a sidebar link for active styling
     const isActive = (path) => location.pathname === path;
 
@@ -42,41 +126,28 @@ const ProductManagement = () => {
         }, 3000);
     };
 
-    // Fetch products with filters and pagination
-    const fetchProducts = async () => {
+    const fetchProducts = async (productIdToUpdate = null) => {
         setLoading(true);
         setError(null);
         try {
-            const params = new URLSearchParams({
-                page: currentPage,
-                limit: productsPerPage,
-            });
-            if (searchQuery) {
-                params.append('search', searchQuery);
-            }
-            if (selectedCategory) {
-                params.append('category', selectedCategory);
-            }
-
+            const params = new URLSearchParams({ page: currentPage, limit: productsPerPage, search: searchQuery, category: selectedCategory });
             const response = await fetch(`${API_BASE_URL}?${params.toString()}`);
-            if (!response.ok) {
-                // Attempt to parse JSON error response if available
-                let errorDetails = `HTTP error! status: ${response.status}`;
-                try {
-                    const errorData = await response.json();
-                    errorDetails += ` - ${errorData.details || errorData.error || response.statusText}`;
-                } catch (jsonError) {
-                    errorDetails += ` - ${response.statusText}`;
-                }
-                throw new Error(errorDetails);
-            }
+            if (!response.ok) throw new Error('Failed to fetch products.');
             const data = await response.json();
+            
             setProducts(data.products);
             setTotalPages(data.totalPages);
-            // Fetch average ratings for fetched products
-            data.products.forEach(product => {
-                fetchAverageRatingForProduct(product.id);
-            });
+
+            // --- THIS IS A KEY FIX ---
+            // If we just updated a product, find its new data and update the selectedProduct state
+            if (productIdToUpdate) {
+                const updatedProduct = data.products.find(p => p.id === productIdToUpdate);
+                if (updatedProduct) {
+                    setSelectedProduct(updatedProduct);
+                }
+            }
+
+            data.products.forEach(product => fetchAverageRatingForProduct(product.id));
         } catch (err) {
             console.error("Failed to fetch products:", err);
             setError(`Failed to load products: ${err.message}`);
@@ -188,13 +259,44 @@ const ProductManagement = () => {
         );
     };
 
-    // Helper function to get the display price (from variants)
-    const getDisplayPrice = (product) => {
-        if (product.variants && product.variants.length > 0) {
-            // Show the first variant's price, or you could show a price range
-            return parseFloat(product.variants[0].price).toFixed(2);
+    const handleOpenDiscountModal = (product) => {
+        setSelectedProduct(product);
+        setIsModalOpen(true);
+    };
+
+    const handleCloseDiscountModal = () => {
+        setIsModalOpen(false);
+        setSelectedProduct(null);
+    };
+
+    const handleSaveDiscount = async (productId, variantsToSave) => {
+        try {
+            const response = await fetch(`http://localhost:5000/api/products/${productId}/discounts`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ variants: variantsToSave }),
+            });
+            if (!response.ok) throw new Error('Failed to update discounts.');
+            
+            await fetchProducts(productId); 
+            handleCloseDiscountModal();
+            
+        } catch (err) {
+            console.error(`Error saving discounts for product ${productId}:`, err);
+            setError(`Error: ${err.message}`);
         }
-        return '0.00';
+    };
+
+    const getDisplayPrice = (product, getDiscount) => {
+        if (!product.variants || product.variants.length === 0) return '0.00';
+        const validVariants = product.variants.filter(v => v.price !== null);
+        if (validVariants.length === 0) return '0.00';
+        if (getDiscount) {
+            const discountPrices = validVariants.map(v => parseFloat(v.discount_price)).filter(p => !isNaN(p));
+            if (discountPrices.length > 0) return Math.min(...discountPrices).toFixed(2);
+        }
+        const originalPrices = validVariants.map(v => parseFloat(v.price));
+        return Math.min(...originalPrices).toFixed(2);
     };
 
     // Helper function to format image URLs
@@ -216,6 +318,14 @@ const ProductManagement = () => {
 
     return (
         <div className="product-management-container">
+             {isModalOpen && selectedProduct && (
+                <DiscountModal 
+                    product={selectedProduct} 
+                    onClose={handleCloseDiscountModal} 
+                    onSave={handleSaveDiscount}
+                />
+            )}
+
             {/* Sidebar */}
             <aside className="sidebar">
                 <div className="sidebar-logo">EcoThrift</div>
@@ -312,63 +422,75 @@ const ProductManagement = () => {
                         <p className="no-data-text">No products found matching your criteria.</p>
                     ) : (
                         <div className="product-grid">
-                            {products.map((product) => (
-                                <div key={product.id} className="product-card">
-                                    <div className="product-image-container">
-                                        <img
-                                            src={formatImageUrl(product.image_urls)}
-                                            alt={product.product_name || 'Product'}
-                                            className="product-image"
-                                            onError={(e) => {
-                                                e.target.onerror = null;
-                                                e.target.src = `https://placehold.co/400x300/E0E0E0/333333?text=Image+Error`;
-                                            }}
-                                        />
-                                    </div>
-                                    <div className="product-info">
-                                        <h3 className="product-name">{product.product_name}</h3>
-                                        <p className="product-price">${getDisplayPrice(product)}</p>
-                                        <div className="product-rating-section">
-                                            <span className="product-rating-value">
-                                                {productAverageRatings[product.id] ? parseFloat(productAverageRatings[product.id]).toFixed(1) : '0.0'}
-                                            </span>
-                                            {renderStars(parseFloat(productAverageRatings[product.id] || 0))}
+                            {products.map((product) => {
+                                const isOnSale = product.variants && product.variants.some(v => v.discount_price !== null && parseFloat(v.discount_price) < parseFloat(v.price));
+
+                                return (
+                                    <div key={product.id} className="product-card">
+                                        <div className="product-image-container">
+                                            {isOnSale && <div className="sale-badge">On Sale</div>}
+                                            <img
+                                                src={formatImageUrl(product.image_urls)}
+                                                alt={product.product_name}
+                                                className="product-image"
+                                            />
                                         </div>
-                                        {/* Display total stock from all variants */}
-                                        <div className="product-stock">
-                                            <span className="stock-label">Total Stock: </span>
-                                            <span className="stock-value">{product.total_stock || 0}</span>
-                                        </div>
-                                        {/* Display categories */}
-                                        {product.categories && (
-                                            <div className="product-categories">
-                                                <span className="categories-label">Categories: </span>
-                                                <span className="categories-value">{product.categories}</span>
+                    
+                                        <div className="product-info">
+                                            <div> {/* Added a wrapper div for content */}
+                                                <h3 className="product-name">{product.product_name}</h3>
+                                                <div className="price-display">
+                                                    {isOnSale ? (
+                                                        <>
+                                                            <span className="discounted-price">${getDisplayPrice(product, true)}</span>
+                                                            <span className="original-prices">${getDisplayPrice(product, false)}</span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="product-price">${getDisplayPrice(product, false)}</span>
+                                                    )}
+                                                </div>
+                                                <div className="product-rating-section">
+                                                    <span className="product-rating-value">
+                                                        {productAverageRatings[product.id] ? parseFloat(productAverageRatings[product.id]).toFixed(1) : '0.0'}
+                                                    </span>
+                                                    {renderStars(parseFloat(productAverageRatings[product.id] || 0))}
+                                                </div>
+                                                <div className="product-stock">
+                                                    <span className="stock-label">Total Stock: </span>
+                                                    <span className="stock-value">{product.total_stock || 0}</span>
+                                                </div>
+                                                {product.categories && (
+                                                    <div className="product-categories">
+                                                        <span className="categories-label">Categories: </span>
+                                                        <span className="categories-value">{product.categories}</span>
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
+
+                                            <div className="product-actions">
+                                                <button
+                                                    onClick={() => handleOpenDiscountModal(product)}
+                                                    className="action-button discount-button"
+                                                >
+                                                    {isOnSale ? 'Edit Discount' : 'Set Discount'}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleEditProductClick(product.id)}
+                                                    className="action-button edit-button"
+                                                >
+                                                    Edit
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteProductClick(product.id, product.product_name)}
+                                                    className="action-button delete-button"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="product-actions">
-                                        <button
-                                            onClick={() => handleEditProductClick(product.id)}
-                                            className="action-button edit-button"
-                                        >
-                                            <svg className="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                                            </svg>
-                                            Edit
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteProductClick(product.id, product.product_name)}
-                                            className="action-button delete-button"
-                                        >
-                                            <svg className="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                            </svg>
-                                            Delete
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
 
@@ -750,7 +872,17 @@ const ProductManagement = () => {
                     gap: 10px;
                     margin-top: auto;
                 }
-               
+
+                .discount-button {
+                    background-color: #f59e0b; /* bg-yellow-500 */
+                    color: #ffffff;
+                    width: 100%; 
+                }
+
+                .discount-button:hover {
+                    background-color: #d97706; /* hover:bg-yellow-600 */
+                }
+
                 .action-button {
                     width: 50%;
                     padding: 10px;
@@ -762,6 +894,7 @@ const ProductManagement = () => {
                     align-items: center;
                     justify-content: center;
                     transition: background-color 0.2s ease-in-out;
+                    margin-bottom: 8px; 
                 }
 
                 .edit-button {
@@ -840,6 +973,134 @@ const ProductManagement = () => {
                   .product-grid {
                     grid-template-columns: 1fr;
                   }
+                }
+                .modal-backdrop {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0, 0, 0, 0.6);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 1000;
+                }
+                .modal-content {
+                    background-color: #fff;
+                    padding: 2rem;
+                    border-radius: 12px;
+                    width: 90%;
+                    max-width: 600px;
+                    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+                }
+                .modal-content h2 {
+                    margin-top: 0;
+                    margin-bottom: 1.5rem;
+                }
+                .variants-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
+                    max-height: 50vh;
+                    overflow-y: auto;
+                    padding-right: 1rem;
+                }
+                .variant-row {
+                    display: grid;
+                    grid-template-columns: 1fr 1.5fr 1.5fr;
+                    align-items: center;
+                    gap: 1rem;
+                    border-bottom: 1px solid #e5e7eb;
+                    padding-bottom: 1rem;
+                }
+                .variant-size { font-weight: 600; }
+                .variant-price { color: #6b7280; }
+                .discount-input-group { display: flex; flex-direction: column; }
+                .discount-input-group label { font-size: 0.8rem; color: #6b7280; }
+                .discount-input-group input {
+                    padding: 0.5rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                }
+                .modal-actions {
+                    display: flex;
+                    justify-content: flex-end;
+                    gap: 1rem;
+                    margin-top: 2rem;
+                }
+                .modal-save-btn, .modal-cancel-btn {
+                    padding: 0.6rem 1.2rem;
+                    border-radius: 8px;
+                    border: none;
+                    font-weight: 600;
+                    cursor: pointer;
+                }
+                .modal-save-btn {
+                    background-color: #10b981;
+                    color: white;
+                }
+                .modal-cancel-btn {
+                    background-color: #e5e7eb;
+                }
+                .apply-all-section {
+                    display: flex;
+                    gap: 0.5rem;
+                    margin-bottom: 1.5rem;
+                    padding-bottom: 1rem;
+                    border-bottom: 1px solid #e5e7eb;
+                }
+                .apply-all-section input {
+                    flex-grow: 1;
+                    padding: 0.5rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                }
+                 .apply-all-section button {
+                    padding: 0.5rem 1rem;
+                    border: none;
+                    border-radius: 6px;
+                    background-color: #4f46e5;
+                    color: white;
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                }
+                .remove-all-btn {
+                    background-color: #9ca3af !important; 
+                }
+                .sale-badge {
+                    position: absolute;
+                    top: 10px;
+                    left: 10px;
+                    background-color: #ef4444;
+                    color: white;
+                    padding: 4px 8px;
+                    border-radius: 6px;
+                    font-size: 0.8rem;
+                    font-weight: 600;
+                    z-index: 10;
+                }
+                .price-display {
+                    margin-bottom: 12px;
+                }
+
+                .product-price {
+                    color: #047857;
+                    font-size: 1.125rem;
+                    font-weight: bold;
+                }
+
+                .discounted-price {
+                    color: #ef4444; /* red-500 */
+                    font-size: 1.125rem;
+                    font-weight: bold;
+                    margin-right: 8px;
+                }
+                
+                .original-prices {
+                    color: #6b7280; /* gray-500 */
+                    text-decoration: line-through;
+                    font-size: 0.9rem;
                 }
             `}</style>
         </div>

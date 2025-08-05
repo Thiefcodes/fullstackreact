@@ -13,27 +13,32 @@ const RegisterPage2 = () => {
     return null;
   }
 
-  // Add email state
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [country, setCountry] = useState('');
+  const [postalCode, setPostalCode] = useState('');
   const [error, setError] = useState('');
 
   const handleRegister = async (e) => {
     e.preventDefault();
     setError('');
+    if (!/^\d{6}$/.test(postalCode)) {
+      setError('Postal code must be 6 digits');
+      return;
+    }
     const payload = {
       username,
       password,
-      email,         // include email in payload
-      firstName,
-      lastName,
+      email,
+      firstname: firstName,   // must be lowercase to match your backend/server.js
+      lastname: lastName,
       phone,
       address,
       country,
+      postal_code: postalCode, // add postal_code here
       type: "User"
     };
     try {
@@ -98,6 +103,14 @@ const RegisterPage2 = () => {
           placeholder="Country"
           value={country}
           onChange={e => setCountry(e.target.value)}
+          required
+        />
+        <input
+          type="text"
+          placeholder="Postal Code"
+          value={postalCode}
+          onChange={e => setPostalCode(e.target.value)}
+          maxLength={6}
           required
         />
         <button type="submit">Register</button>

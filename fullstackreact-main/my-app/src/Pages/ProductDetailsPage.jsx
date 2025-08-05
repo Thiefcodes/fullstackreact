@@ -174,7 +174,16 @@ const handleAddToCart = async () => {
                     
                     <div className="product-price-container">
                         {selectedVariant ? (
-                            <p className="product-price-details">{`$${selectedVariant.price}`}</p>
+                            <div className="price-display">
+                                {selectedVariant.discount_price !== null && parseFloat(selectedVariant.discount_price) < parseFloat(selectedVariant.price) ? (
+                                    <>
+                                        <span className="discount-price1">${parseFloat(selectedVariant.discount_price).toFixed(2)}</span>
+                                        <span className="original-price1">${parseFloat(selectedVariant.price).toFixed(2)}</span>
+                                    </>
+                                ) : (
+                                    <p className="product-price-details">${parseFloat(selectedVariant.price).toFixed(2)}</p>
+                                )}
+                            </div>
                         ) : (
                             <p className="price-placeholder">Select a size to see the price</p>
                         )}

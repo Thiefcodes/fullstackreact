@@ -1,13 +1,12 @@
-// src/pages/EcommercePage.jsx - DEFINITIVELY CORRECTED
-
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import '../Styles/EcommercePage.css'; // Import the final stylesheet
+import '../Styles/EcommercePage.css'; 
 
-// --- Reusable ProductCard Component ---
 const ProductCard = ({ product, initialWishlist, onWishlistChange }) => {
     const userId = localStorage.getItem('userId');
     const isWishlisted = initialWishlist.includes(product.id);
+    const isOnSale = product.discount_price !== null && parseFloat(product.discount_price) < parseFloat(product.price);
+
 
     const handleWishlistClick = async (e) => {
         e.preventDefault();
@@ -66,9 +65,16 @@ const ProductCard = ({ product, initialWishlist, onWishlistChange }) => {
                     </div>
                     <h3 className="product-name">{product.product_name}</h3>
                     <div className="product-hover-info">
-                        <p className="product-price">
-                            {product.price ? `$${product.price}` : 'Unavailable'}
-                        </p>
+                        <div className="price-display">
+                            {isOnSale ? (
+                                <>
+                                    <span className="discount-price">${parseFloat(product.discount_price).toFixed(2)}</span>
+                                    <span className="original-price">${parseFloat(product.price).toFixed(2)}</span>
+                                </>
+                            ) : (
+                                <span className="product-price">${parseFloat(product.price).toFixed(2)}</span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

@@ -278,7 +278,7 @@ db.query('SELECT NOW()', (err, res) => {
   }
 });
 
-
+//=======REGISTER USER============
 app.post('/api/register', async (req, res) => {
   const {
     username,
@@ -290,7 +290,8 @@ app.post('/api/register', async (req, res) => {
     address,
     country,
     profilepic = '',   // can be empty initially
-    email
+    email,
+    postal_code        // NEW: Accept postal_code from frontend
   } = req.body;
 
   try {
@@ -300,12 +301,12 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).send('Username already taken');
     }
 
-    // 2. Insert new user with all fields
+    // 2. Insert new user with all fields (including postal_code)
     await db.query(
       `INSERT INTO users 
-      (username, password, type, firstname, lastname, phone, address, country, profilepic, email) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [username, password, type, firstname, lastname, phone, address, country, profilepic, email]
+      (username, password, type, firstname, lastname, phone, address, country, profilepic, email, postal_code) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [username, password, type, firstname, lastname, phone, address, country, profilepic, email, postal_code]
     );
 
     const newUser = await db.query('SELECT id FROM users WHERE username = $1', [username]);
@@ -321,6 +322,7 @@ app.post('/api/register', async (req, res) => {
     res.status(500).send(err?.detail || err.message || 'Registration error');
   }
 });
+
 
 
 
@@ -1828,6 +1830,91 @@ app.delete('/api/products/:id', async (req, res) => {
     }
 });
 
+app.put('/api/products/:productId/discounts', async (req, res) => {
+    const { productId } = req.params;
+    const { variants } = req.body; // Expects an array of { variant_id, discount_price }
+
+    if (!variants || !Array.isArray(variants)) {
+        return res.status(400).json({ error: 'A valid variants array is required.' });
+    }
+
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+
+        // --- Step 1: Get PRE-UPDATE state for notification logic ---
+        const oldVariantsState = await client.query(
+            'SELECT id, price, discount_price FROM product_variants WHERE product_id = $1', 
+            [productId]
+        );
+        
+        // Check if a discount is being newly applied (was null, now has a price)
+        const wasPreviouslyOnSale = oldVariantsState.rows.some(v => v.discount_price !== null);
+        const isNowOnSale = variants.some(v => v.discount_price !== null && v.discount_price !== '');
+        const shouldSendNotification = !wasPreviouslyOnSale && isNowOnSale;
+
+        // --- Step 2: Update all variants in the database ---
+        for (const variant of variants) {
+            let finalDiscountPrice = null;
+            if (variant.discount_price !== null && variant.discount_price !== undefined && variant.discount_price !== '') {
+                finalDiscountPrice = parseFloat(variant.discount_price);
+            }
+            await client.query(
+                'UPDATE product_variants SET discount_price = $1 WHERE id = $2 AND product_id = $3',
+                [finalDiscountPrice, variant.variant_id, productId]
+            );
+        }
+
+        await client.query('COMMIT');
+        
+        // --- Step 3: Send response to staff immediately ---
+        res.status(200).json({ message: 'Discounts updated successfully.' });
+
+        // --- Step 4: Asynchronous Email Notification Logic (if needed) ---
+        if (shouldSendNotification) {
+            console.log(`New discount applied to product ${productId}. Notifying users...`);
+
+            // Get product name and user emails in parallel
+            const [productInfo, usersToNotify] = await Promise.all([
+                db.query('SELECT product_name FROM products WHERE id = $1', [productId]),
+                db.query('SELECT u.email FROM users u JOIN wishlist_items w ON u.id = w.user_id WHERE w.product_id = $1', [productId])
+            ]);
+
+            if (usersToNotify.rows.length > 0 && productInfo.rows.length > 0) {
+                const productName = productInfo.rows[0].product_name;
+
+                // Find the lowest original price and lowest new discount price to show in the email
+                const originalPrice = Math.min(...oldVariantsState.rows.map(v => parseFloat(v.price)));
+                const newDiscountPrice = Math.min(...variants.filter(v => v.discount_price).map(v => parseFloat(v.discount_price)));
+
+                console.log(`Found ${usersToNotify.rows.length} users. Notifying about "${productName}"...`);
+                
+                for (const user of usersToNotify.rows) {
+                    const mailOptions = {
+                        from: process.env.EMAIL_USER,
+                        to: user.email,
+                        subject: `Price Drop Alert! An item on your wishlist is on sale!`,
+                        html: `
+                            <p>Great news! An item on your EcoThrift wishlist, <strong>${productName}</strong>, is now on sale.</p>
+                            <p>It's now available from just <strong>$${newDiscountPrice.toFixed(2)}</strong> (was $${originalPrice.toFixed(2)}).</p>
+                            <p>Check it out before it's gone!</p>
+                        `
+                    };
+                    transporter.sendMail(mailOptions).catch(err => {
+                        console.error(`Failed to send email to ${user.email}:`, err);
+                    });
+                }
+            }
+        }
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`Error updating discounts for product ${productId}:`, err);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    } finally {
+        client.release();
+    }
+});
 
 // =================================================================
 //  ===> REVIEW CRUD OPERATIONS (Updated for New Schema) <===
@@ -1982,25 +2069,27 @@ app.put('/api/variants/:variantId/stock', async (req, res) => {
 app.get('/api/shop/products', async (req, res) => {
     const { category, search, page = 1, limit = 9 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
+
     let queryParams = [];
     let whereClauses = ["EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active')"];
-    if (category) {
-        queryParams.push(`%${category}%`);
-        whereClauses.push(`p.categories ILIKE $${queryParams.length}`);
-    }
-    if (search) {
-        queryParams.push(`%${search}%`);
-        whereClauses.push(`(p.product_name ILIKE $${queryParams.length} OR p.product_description ILIKE $${queryParams.length})`);
-    }
+    if (category) { /* ... */ }
+    if (search) { /* ... */ }
     const whereString = `WHERE ${whereClauses.join(' AND ')}`;
+
+    // THIS QUERY IS NOW UPGRADED
     const dataQuery = `
-        SELECT p.*, (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price
-        FROM products p ${whereString}
+        SELECT 
+            p.*,
+            (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price,
+            (SELECT MIN(pv.discount_price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as discount_price
+        FROM products p
+        ${whereString}
         ORDER BY p.created_at DESC
         LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
     `;
     const dataParams = [...queryParams, parseInt(limit), offset];
     const countQuery = `SELECT COUNT(p.id) FROM products p ${whereString}`;
+
     try {
         const productsResult = await db.query(dataQuery, dataParams);
         const countResult = await db.query(countQuery, queryParams);
@@ -2045,9 +2134,14 @@ app.get('/api/wishlist/ids/:userId', async (req, res) => {
 app.get('/api/wishlist/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
+        // THIS QUERY IS NOW UPGRADED
         const query = `
-            SELECT p.*, (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price
-            FROM products p JOIN wishlist_items w ON p.id = w.product_id
+            SELECT 
+                p.*,
+                (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price,
+                (SELECT MIN(pv.discount_price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as discount_price
+            FROM products p
+            JOIN wishlist_items w ON p.id = w.product_id
             WHERE w.user_id = $1;
         `;
         const { rows } = await db.query(query, [userId]);
@@ -2116,6 +2210,7 @@ app.get('/api/shop/cart/:userId', async (req, res) => {
                 pv.id AS variant_id,
                 pv.size,
                 pv.price,
+                pv.discount_price, -- <-- THIS IS THE NEWLY ADDED FIELD
                 p.id AS product_id,
                 p.product_name,
                 p.image_urls
@@ -2249,3 +2344,337 @@ const simulateDelivery = (orderId) => {
     }, 20000); // 20 seconds
 };
 
+// server.js
+
+// =========== UPDATED & ENHANCED DASHBOARD ENDPOINT ===========
+app.get('/api/dashboard/summary', async (req, res) => {
+  // now only two modes: total (yearly) or daily (last 7 days)
+  const { period = 'total' } = req.query;
+  const now = new Date();
+
+  let currentStartDate, previousStartDate, previousEndDate;
+  let graphInterval, graphFormat, graphSeriesStart, graphTrunc;
+
+  switch (period) {
+    case 'daily':
+      // last 7 days, daily points
+      currentStartDate  = new Date(now);
+      currentStartDate.setDate(now.getDate() - 6);
+      previousStartDate = new Date(currentStartDate);
+      previousStartDate.setDate(currentStartDate.getDate() - 7);
+      previousEndDate   = new Date(currentStartDate);
+
+      graphInterval    = '1 day';
+      graphFormat      = 'MM/DD';
+      graphSeriesStart = `NOW() - INTERVAL '6 days'`;
+      graphTrunc       = 'day';
+      break;
+
+    case 'total':
+    default:
+      // whole year, monthly points
+      currentStartDate  = new Date(now.getFullYear(), 0, 1);
+      previousStartDate = new Date(now.getFullYear() - 1, 0, 1);
+      previousEndDate   = new Date(currentStartDate);
+
+      graphInterval    = '1 month';
+      graphFormat      = 'Mon';
+      graphSeriesStart = `DATE_TRUNC('year', NOW())`;
+      graphTrunc       = 'month';
+      break;
+  }
+
+  const currentEndDate = now;
+
+  // --- fetch counts for customers, profit & orders ---
+  const getMetricsForPeriod = async (startDate, endDate) => {
+    const customerQ = `
+      SELECT COUNT(DISTINCT buyer_id) AS cnt
+        FROM orders
+       WHERE ordered_at >= $1 AND ordered_at < $2;
+    `;
+    const profitQ = `
+      SELECT COALESCE(SUM(oi.price_at_purchase),0) AS total
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+       WHERE o.ordered_at >= $1
+         AND o.ordered_at < $2
+         AND oi.item_type = 'shop';
+    `;
+    const orderQ = `
+      SELECT COUNT(id) AS total
+        FROM orders
+       WHERE ordered_at >= $1 AND ordered_at < $2;
+    `;
+    const [cRes, pRes, oRes] = await Promise.all([
+      db.query(customerQ, [startDate, endDate]),
+      db.query(profitQ,   [startDate, endDate]),
+      db.query(orderQ,    [startDate, endDate]),
+    ]);
+    return {
+      customers: parseInt(cRes.rows[0].cnt, 10)  || 0,
+      profit:    parseFloat(pRes.rows[0].total)  || 0,
+      orders:    parseInt(oRes.rows[0].total, 10)|| 0,
+    };
+  };
+
+  const [current, previous] = await Promise.all([
+    getMetricsForPeriod(currentStartDate, currentEndDate),
+    getMetricsForPeriod(previousStartDate, previousEndDate),
+  ]);
+
+  const calcPct = (cur, prev) =>
+    prev === 0 ? (cur > 0 ? 100 : 0) : ((cur - prev) / prev) * 100;
+
+  // --- build the time-series for the chart ---
+  const graphSQL = `
+    WITH series AS (
+      SELECT generate_series(
+        (${graphSeriesStart})::date,
+        NOW()::date,
+        '${graphInterval}'::interval
+      ) AS date
+    )
+    SELECT
+      TO_CHAR(series.date, '${graphFormat}') AS report_date,
+      COALESCE(SUM(CASE WHEN oi.item_type='shop'        THEN oi.price_at_purchase ELSE 0 END),0) AS "ourProduct",
+      COALESCE(SUM(CASE WHEN oi.item_type='marketplace' THEN oi.price_at_purchase ELSE 0 END),0) AS "recycledClothes"
+    FROM series
+    LEFT JOIN orders o
+      ON DATE_TRUNC('${graphTrunc}', o.ordered_at) = series.date
+    LEFT JOIN order_items oi
+      ON oi.order_id = o.id
+    GROUP BY series.date
+    ORDER BY series.date;
+  `;
+  const graphRes = await db.query(graphSQL);
+
+  res.json({
+    metrics: {
+      customers: {
+        value:      current.customers,
+        percentage: calcPct(current.customers, previous.customers)
+      },
+      profit: {
+        value:      current.profit,
+        percentage: calcPct(current.profit, previous.profit)
+      },
+      orders: {
+        value:      current.orders,
+        percentage: calcPct(current.orders, previous.orders)
+      }
+    },
+    graphData: graphRes.rows.map(r => ({
+      date:               r.report_date,
+      'Our Product':      parseFloat(r.ourProduct),
+      'Recycled clothes': parseFloat(r.recycledClothes)
+    }))
+  });
+});
+
+
+// =========== RECENT TRANSACTIONS ENDPOINT ===========
+app.get('/api/dashboard/recent-transactions', async (req, res) => {
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const sql = `
+    SELECT
+      o.id            AS order_id,
+      o.buyer_id,
+      o.ordered_at,
+      oi.purchased_item_id,
+      oi.item_type,
+      oi.price_at_purchase,
+      u.username,
+      CASE
+        WHEN oi.item_type='marketplace' THEN mp.title
+        ELSE p.product_name
+      END AS product_name
+    FROM order_items oi
+    JOIN orders o ON oi.order_id = o.id
+    JOIN users u    ON o.buyer_id = u.id
+    LEFT JOIN marketplaceproducts mp
+      ON oi.item_type='marketplace' AND oi.purchased_item_id = mp.id
+    LEFT JOIN product_variants pv
+      ON oi.item_type='shop' AND oi.purchased_item_id = pv.id
+    LEFT JOIN products p
+      ON pv.product_id = p.id
+    ORDER BY o.ordered_at DESC
+    LIMIT $1;
+  `;
+  const { rows } = await db.query(sql, [limit]);
+  res.json(rows);
+});
+
+// =================================================================
+//  ===> FIXED ANALYTICS API ENDPOINTS <===
+// =================================================================
+
+// Get conversion rate (registered users who made purchases)
+app.get('/api/analytics/conversion-rate', async (req, res) => {
+  try {
+    // Get total registered users
+    const totalUsersResult = await db.query('SELECT COUNT(*) as total FROM users');
+    const totalUsers = parseInt(totalUsersResult.rows[0]?.total) || 0;
+
+    // Get users who have made at least one purchase
+    const purchasedUsersResult = await db.query(`
+      SELECT COUNT(DISTINCT buyer_id) as total 
+      FROM orders
+    `);
+    const purchasedUsers = parseInt(purchasedUsersResult.rows[0]?.total) || 0;
+
+    const conversionRate = totalUsers > 0 ? (purchasedUsers / totalUsers) * 100 : 0;
+
+    res.json({ 
+      conversionRate: parseFloat(conversionRate.toFixed(2)),
+      totalUsers,
+      purchasedUsers
+    });
+  } catch (err) {
+    console.error('Error calculating conversion rate:', err);
+    res.json({ 
+      conversionRate: 0,
+      totalUsers: 0,
+      purchasedUsers: 0
+    });
+  }
+});
+
+// Get top 5 performing products (SHOP items only)
+app.get('/api/analytics/top-products', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        p.product_name as name,
+        p.id,
+        COALESCE(SUM(oi.price_at_purchase), 0) as total_sales,
+        COUNT(*) as units_sold
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      JOIN product_variants pv ON oi.item_type = 'shop' AND oi.purchased_item_id = pv.id
+      JOIN products p ON pv.product_id = p.id
+      WHERE o.ordered_at >= NOW() - INTERVAL '30 days'
+        AND oi.item_type = 'shop'
+      GROUP BY p.id, p.product_name
+      HAVING SUM(oi.price_at_purchase) > 0
+      ORDER BY total_sales DESC
+      LIMIT 5
+    `;
+    
+    const { rows } = await db.query(query);
+    
+    // Ensure valid data format
+    const validRows = rows.map(row => ({
+      id: row.id,
+      name: row.name || 'Unknown Product',
+      total_sales: parseFloat(row.total_sales) || 0,
+      units_sold: parseInt(row.units_sold) || 0
+    }));
+    
+    res.json(validRows);
+  } catch (err) {
+    console.error('Error fetching top products:', err);
+    res.json([]);
+  }
+});
+
+// Get category performance for pie chart (BOTH shop and marketplace)
+app.get('/api/analytics/category-performance', async (req, res) => {
+  try {
+    const query = `
+      WITH category_sales AS (
+        -- Shop items
+        SELECT 
+          p.categories as category,
+          COALESCE(SUM(oi.price_at_purchase), 0) as total_sales,
+          'shop' as source
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        JOIN product_variants pv ON oi.item_type = 'shop' AND oi.purchased_item_id = pv.id
+        JOIN products p ON pv.product_id = p.id
+        WHERE o.ordered_at >= NOW() - INTERVAL '30 days'
+          AND oi.item_type = 'shop'
+          AND p.categories IS NOT NULL
+          AND TRIM(p.categories) != ''
+        GROUP BY p.categories
+        
+        UNION ALL
+        
+        -- Marketplace items
+        SELECT 
+          mp.category as category,
+          COALESCE(SUM(oi.price_at_purchase), 0) as total_sales,
+          'marketplace' as source
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        JOIN marketplaceproducts mp ON oi.item_type = 'marketplace' AND oi.purchased_item_id = mp.id
+        WHERE o.ordered_at >= NOW() - INTERVAL '30 days'
+          AND oi.item_type = 'marketplace'
+          AND mp.category IS NOT NULL
+          AND TRIM(mp.category) != ''
+        GROUP BY mp.category
+      ),
+      combined_categories AS (
+        SELECT 
+          category as name,
+          SUM(total_sales) as value
+        FROM category_sales
+        WHERE total_sales > 0
+        GROUP BY category
+      )
+      SELECT 
+        name,
+        value,
+        ROUND((value / NULLIF(SUM(value) OVER (), 0)) * 100, 1) as percentage
+      FROM combined_categories
+      WHERE value > 0
+      ORDER BY value DESC
+    `;
+    
+    const { rows } = await db.query(query);
+    
+    // Ensure valid data format
+    const validRows = rows.map(row => ({
+      name: row.name || 'Unknown Category',
+      value: parseFloat(row.value) || 0,
+      percentage: parseFloat(row.percentage) || 0
+    }));
+    
+    res.json(validRows);
+  } catch (err) {
+    console.error('Error fetching category performance:', err);
+    res.json([]);
+  }
+});
+
+app.get('/api/dashboard/sales-density', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        LEFT(u.postal_code::text, 2) AS sector,
+        COUNT(o.id) AS order_count,
+        COALESCE(SUM(o.total_price), 0) AS total_sales
+      FROM orders o
+      JOIN users u ON o.buyer_id = u.id
+      WHERE u.postal_code IS NOT NULL
+        AND LENGTH(TRIM(u.postal_code::text)) >= 2
+        AND o.ordered_at >= NOW() - INTERVAL '30 days'
+      GROUP BY sector
+      HAVING COUNT(o.id) > 0
+      ORDER BY order_count DESC
+    `;
+    const { rows } = await db.query(query);
+
+    // Format output for your AnalPage.jsx component
+    const validRows = rows.map(row => ({
+      sector: row.sector || '00',
+      order_count: parseInt(row.order_count) || 0,
+      total_sales: parseFloat(row.total_sales) || 0
+    }));
+
+    res.json(validRows);
+  } catch (err) {
+    console.error('Error fetching sales density:', err);
+    res.json([]);
+  }
+});

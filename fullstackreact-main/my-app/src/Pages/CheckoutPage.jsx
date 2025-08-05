@@ -18,7 +18,7 @@ const CheckoutPage = () => {
 
     const SHIPPING_FEE = 5.00;
 
-    const subtotal = useMemo(() => itemsToCheckout.reduce((total, item) => total + parseFloat(item.price), 0), [itemsToCheckout]);
+    const subtotal = useMemo(() => itemsToCheckout.reduce((total, item) => total + parseFloat(item.displayPrice), 0), [itemsToCheckout]);
     const shippingFee = useMemo(() => deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0, [deliveryMethod]);
     //const totalPrice = useMemo(() => (subtotal + shippingFee).toFixed(2), [subtotal, shippingFee]);
 
@@ -92,17 +92,29 @@ const CheckoutPage = () => {
         <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px', display: 'flex', gap: '40px' }}>
             <div style={{ flex: 2 }}>
                 <h2>Order Summary</h2>
-                {itemsToCheckout.map(item => (
-                    <div key={item.cart_item_id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #eee', padding: '10px 0' }}>
-                        {/* UPDATED: Uses the unified 'imageUrl' and 'name' fields */}
-                        <img src={item.imageUrl} alt={item.name} style={{ width: '80px', height: '80px', objectFit: 'cover', marginRight: '15px' }} />
-                        <div style={{ flexGrow: 1 }}>
-                            <p style={{ margin: 0, fontWeight: 'bold' }}>{item.name}</p>
-                            <p style={{ margin: '4px 0', color: '#555' }}>Size: {item.size}</p>
+                {itemsToCheckout.map(item => {
+                    const isOnSale = item.type === 'shop' && item.discount_price !== null && parseFloat(item.discount_price) < parseFloat(item.price);
+                    return (
+                        <div key={item.cart_item_id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #eee', padding: '10px 0' }}>
+                            <img src={item.imageUrl} alt={item.name} style={{ width: '80px', height: '80px', objectFit: 'cover', marginRight: '15px' }} />
+                            <div style={{ flexGrow: 1 }}>
+                                <p style={{ margin: 0, fontWeight: 'bold' }}>{item.name}</p>
+                                <p style={{ margin: '4px 0', color: '#555' }}>Size: {item.size}</p>
+                            </div>
+                            {/* UPDATED Price Display */}
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                                {isOnSale ? (
+                                    <>
+                                        <p style={{ margin: 0, color: 'red' }}>${parseFloat(item.displayPrice).toFixed(2)}</p>
+                                        <p style={{ margin: 0, textDecoration: 'line-through', color: '#888' }}>${parseFloat(item.price).toFixed(2)}</p>
+                                    </>
+                                ) : (
+                                    <p style={{ margin: 0 }}>${parseFloat(item.price).toFixed(2)}</p>
+                                )}
+                            </div>
                         </div>
-                        <p style={{ margin: 0 }}>${parseFloat(item.price).toFixed(2)}</p>
-                    </div>
-                ))}
+                    );
+                })}
                 <div style={{ marginTop: '20px', borderTop: '2px solid #333', paddingTop: '10px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <p>Subtotal:</p>
