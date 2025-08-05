@@ -162,6 +162,8 @@ const MarketplacePage = () => {
     const [selectedCategory, setSelectedCategory] = useState('All Categories');
     const [searchQuery, setSearchQuery] = useState('');
     const [triggeredSearch, setTriggeredSearch] = useState('');
+    const [sortOption, setSortOption] = useState('Newest');
+
     const categories = ['All Categories', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Accessories', 'Shoes'];
 
     const fetchProducts = async () => {
@@ -173,6 +175,7 @@ const MarketplacePage = () => {
             if (userId) params.append('excludeUserId', userId);
             if (selectedCategory !== 'All Categories') params.append('category', selectedCategory);
             if (triggeredSearch.trim() !== '') params.append('search', triggeredSearch.trim());
+            if (sortOption) params.append('sort', sortOption);
 
             const apiUrl = `http://localhost:5000/api/marketplaceproducts?${params.toString()}`;
             const response = await axios.get(apiUrl);
@@ -199,7 +202,7 @@ const MarketplacePage = () => {
         };
         ws.onclose = () => console.log('Marketplace WebSocket closed');
         return () => ws.close();
-    }, [selectedCategory, triggeredSearch]);
+    }, [selectedCategory, triggeredSearch, sortOption]);
 
     if (loading) return <p>Loading products...</p>;
     if (error) return <p style={{ color: 'red' }}>{error}</p>;
@@ -286,6 +289,8 @@ const MarketplacePage = () => {
                 </select>
 
                 <select
+                    value={sortOption}
+                    onChange={(e) => setSortOption(e.target.value)}
                     style={{
                         padding: '10px',
                         border: '1px solid #ccc',
@@ -294,12 +299,13 @@ const MarketplacePage = () => {
                         minWidth: '180px'
                     }}
                 >
-                    <option>Sort by Newest</option>
-                    <option>Price: Low to High</option>
-                    <option>Price: High to Low</option>
+                    <option value="Newest">Sort by Newest</option>
+                    <option value="PriceLowToHigh">Price: Low to High</option>
+                    <option value="PriceHighToLow">Price: High to Low</option>
                 </select>
             </div>
 
+            {/* === Product Grid === */}
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
                 {products.length > 0 ? (
                     products.map(product => (

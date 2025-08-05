@@ -936,57 +936,63 @@ app.post('/api/marketplaceproducts', async (req, res) => {
  * @access  Public
  */
 app.get('/api/marketplaceproducts', async (req, res) => {
-    const { excludeUserId, status, seller_id, category, search } = req.query;
+    const { excludeUserId, status, seller_id, category, search, sort } = req.query;
 
     try {
-        let getProductsQuery;
         const queryParams = [];
-        let whereClauses = [];
+        const whereClauses = [];
 
-        // Status filtering (for staff view, etc.)
+        // Filter: status (default to 'available')
         if (status) {
             whereClauses.push(`p.status = $${queryParams.length + 1}`);
-            queryParams.push(status.toLowerCase()); // 'pending' or 'available'
+            queryParams.push(status.toLowerCase());
         } else {
-            // Default to 'available' if status is not provided (for marketplace)
             whereClauses.push(`p.status = $${queryParams.length + 1}`);
             queryParams.push('available');
         }
 
-        // Exclude seller if needed
+        // Filter: exclude seller's own items
         if (excludeUserId) {
             whereClauses.push(`p.seller_id != $${queryParams.length + 1}`);
             queryParams.push(excludeUserId);
         }
 
-        // Filter by seller if provided
+        // Filter: specific seller
         if (seller_id) {
             whereClauses.push(`p.seller_id = $${queryParams.length + 1}`);
             queryParams.push(seller_id);
         }
 
+        // Filter: category
         if (category && category !== 'All Categories') {
             whereClauses.push(`p.category = $${queryParams.length + 1}`);
             queryParams.push(category);
         }
 
+        // Filter: search keyword in title
         if (search) {
-    whereClauses.push(`p.title ILIKE $${queryParams.length + 1}`);
-    queryParams.push(`%${search}%`);
-}
+            whereClauses.push(`p.title ILIKE $${queryParams.length + 1}`);
+            queryParams.push(`%${search}%`);
+        }
 
+        // Determine ORDER BY clause based on sort option
+        let orderByClause = 'ORDER BY p.created_at DESC'; // Default
+        if (sort === 'PriceLowToHigh') {
+            orderByClause = 'ORDER BY p.price ASC';
+        } else if (sort === 'PriceHighToLow') {
+            orderByClause = 'ORDER BY p.price DESC';
+        }
 
-        getProductsQuery = `
+        const getProductsQuery = `
             SELECT p.*, u.username AS seller_name
             FROM marketplaceproducts p
             LEFT JOIN users u ON p.seller_id = u.id
-            WHERE ${whereClauses.join(' AND ')}
-            ORDER BY p.created_at DESC;
+            ${whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : ''}
+            ${orderByClause};
         `;
 
         const result = await db.query(getProductsQuery, queryParams);
         res.status(200).json(result.rows);
-
     } catch (err) {
         console.error('Error fetching products:', err.message);
         res.status(500).json({ error: 'Server error while fetching products.' });
