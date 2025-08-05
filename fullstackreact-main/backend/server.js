@@ -10,7 +10,8 @@ const { WebSocketServer } = require('ws');
 const fs = require('fs');
 const path = require('path');
 const { analyzeSustainability, analyzeSustainabilityByText } = require('./gemini');
-
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const paypal = require('@paypal/checkout-server-sdk');
 
 const broadcast = (data) => {
     wss.clients.forEach((client) => {
@@ -19,6 +20,12 @@ const broadcast = (data) => {
         }
     });
 };
+
+const environment = new paypal.core.SandboxEnvironment(
+    process.env.PAYPAL_CLIENT_ID,
+    process.env.PAYPAL_CLIENT_SECRET
+);
+const paypalClient = new paypal.core.PayPalHttpClient(environment);
 
 app.use(cors());
 app.use(express.json());
@@ -2299,51 +2306,109 @@ app.delete('/api/shop/cart/:userId/:variantId', async (req, res) => {
 });
 
 app.post('/api/create-payment-intent', async (req, res) => {
-    const { items, deliveryMethod } = req.body;
+    // NEW: Accept voucherId and userId from the request
+    const { items, deliveryMethod, voucherId, userId } = req.body;
     const SHIPPING_FEE = 5.00;
 
-    const subtotal = items.reduce((total, item) => total + parseFloat(item.displayPrice), 0);
-    const shippingFee = deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0;
-    const totalAmount = Math.round((subtotal + shippingFee) * 100); 
-
     try {
+        // --- SECURE SERVER-SIDE CALCULATION ---
+        let subtotal = items.reduce((total, item) => total + parseFloat(item.displayPrice), 0);
+        let discountAmount = 0;
+
+        // --- SECURE VOUCHER VALIDATION ---
+        if (voucherId && userId) {
+            // 1. Check if the user actually owns this active voucher
+            const voucherRes = await db.query(
+                `SELECT v.* 
+                 FROM user_vouchers uv
+                 JOIN vouchers v ON uv.voucher_id = v.id
+                 WHERE uv.id = $1 AND uv.user_id = $2 AND uv.is_active = TRUE`,
+                [voucherId, userId]
+            );
+            
+            if (voucherRes.rows.length > 0) {
+                const voucher = voucherRes.rows[0];
+                // 2. Calculate the discount securely on the server
+                discountAmount = (subtotal * voucher.discount_percent / 100);
+            } else {
+                console.warn(`User ${userId} attempted to use invalid or inactive voucher ${voucherId}.`);
+            }
+        }
+        
+        const shippingFee = deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0;
+        // 3. Calculate the final total on the server
+        const finalTotal = subtotal - discountAmount + shippingFee;
+
+        // 4. Ensure the final amount is not negative and is at least 50 cents (Stripe's minimum)
+        const totalAmountInCents = Math.max(50, Math.round(finalTotal * 100));
+
         const paymentIntent = await stripe.paymentIntents.create({
-            amount: totalAmount,
-            currency: 'sgd', 
+            amount: totalAmountInCents,
+            currency: 'usd', // or your currency
         });
+
         res.send({ clientSecret: paymentIntent.client_secret });
+
     } catch (e) {
-        res.status(400).send({ error: { message: e.message } });
+        console.error("Error creating payment intent:", e.message);
+        res.status(500).send({ error: { message: "Failed to create payment intent." } });
     }
 });
 
 app.post('/api/paypal/create-order', async (req, res) => {
-    const { items, deliveryMethod } = req.body;
+    // ENHANCEMENT: Accept voucherId and userId to correctly calculate the total
+    const { items, deliveryMethod, voucherId, userId } = req.body;
     const SHIPPING_FEE = 5.00;
 
-    const subtotal = items.reduce((total, item) => total + parseFloat(item.displayPrice), 0);
-    const shippingFee = deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0;
-    const totalAmount = (subtotal + shippingFee).toFixed(2);
-
-    const request = new paypal.orders.OrdersCreateRequest();
-    request.prefer("return=representation");
-    request.requestBody({
-        intent: 'CAPTURE',
-        purchase_units: [{
-            amount: {
-                currency_code: 'USD',
-                value: totalAmount,
-            },
-        }],
-    });
-
     try {
+        // --- SECURE SERVER-SIDE CALCULATION (Same as Stripe) ---
+        let subtotal = items.reduce((total, item) => total + parseFloat(item.displayPrice), 0);
+        let discountAmount = 0;
+
+        // --- SECURE VOUCHER VALIDATION (Same as Stripe) ---
+        if (voucherId && userId) {
+            const voucherRes = await db.query(
+                `SELECT v.* 
+                 FROM user_vouchers uv
+                 JOIN vouchers v ON uv.voucher_id = v.id
+                 WHERE uv.id = $1 AND uv.user_id = $2 AND uv.is_active = TRUE`,
+                [voucherId, userId]
+            );
+            
+            if (voucherRes.rows.length > 0) {
+                const voucher = voucherRes.rows[0];
+                discountAmount = (subtotal * voucher.discount_percent / 100);
+            }
+        }
+        
+        const shippingFee = deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0;
+        const finalTotal = subtotal - discountAmount + shippingFee;
+
+        // Ensure total is not negative
+        const totalAmount = Math.max(0, finalTotal).toFixed(2);
+
+        const request = new paypal.orders.OrdersCreateRequest();
+        request.prefer("return=representation");
+        request.requestBody({
+            intent: 'CAPTURE',
+            purchase_units: [{
+                amount: {
+                    currency_code: 'USD',
+                    value: totalAmount,
+                },
+            }],
+        });
+
         const order = await paypalClient.execute(request);
         res.status(200).json({ orderID: order.result.id });
+
     } catch (err) {
-        res.status(500).send(err.message);
+        // More detailed logging for PayPal errors
+        console.error("Error creating PayPal order:", err.statusCode ? err.statusCode : err.message, err.result ? err.result : '');
+        res.status(500).send(err.message || 'Failed to create PayPal order');
     }
 });
+
 
 app.post('/api/paypal/capture-order', async (req, res) => {
     const { orderID } = req.body;
