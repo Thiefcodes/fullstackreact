@@ -1,0 +1,540 @@
+/* Layout Container */
+.admin-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 240px;
+  background: #044733;
+  color: #fff;
+  padding: 1.5rem 0;
+  box-shadow: 2px 0 6px rgba(0,0,0,0.07);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.sidebar-logo {
+  text-align: center;
+  font-size: 1.7rem;
+  font-weight: bold;
+  margin-bottom: 2rem;
+  color: #fff;
+}
+.sidebar-nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+}
+.sidebar-nav li {
+  margin-bottom: 0.5rem;
+  width: 100%;
+}
+.sidebar-link {
+  display: block;
+  padding: .8rem 2rem;
+  color: #e0e0e0;
+  text-decoration: none;
+  border-radius: 0 2rem 2rem 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  transition: background .2s, color .2s;
+}
+.sidebar-link:hover {
+  background: rgba(255,255,255,0.09);
+  color: #fff;
+}
+.sidebar-link.active,
+.sidebar-nav li .sidebar-link.active {
+  background: #ffffff11;
+  color: #ffeabf;
+}
+.main-content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 !important;
+}
+
+/* Container and background */
+.admin-container {
+  background-color: #F8F9F5;
+  min-height: 100vh;
+  padding: 1.5rem 1.8rem;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+/* Compact Top Row: Stats + Filters */
+.dashboard-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+
+.stats-cards {
+  display: flex;
+  gap: 1rem;
+  flex: 1;
+  min-width: 0;
+}
+.stat-card {
+  background: white;
+  border-radius: 1rem;
+  padding: 1rem 1.2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  min-width: 180px;
+  flex: 1;
+}
+.stat-title {
+  font-size: 1rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+.stat-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.stat-value {
+  font-size: 1.7rem;
+  font-weight: bold;
+  color: #111827;
+}
+.stat-percentage {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-left: 8px;
+}
+.stat-percentage.positive {
+  color: #10B981;
+}
+.stat-percentage.negative {
+  color: #EF4444;
+}
+
+/* Vertical Toggle for period (Total/Daily) */
+.period-toggle-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-left: 1rem;
+}
+.filter-btn {
+  padding: 0.6rem 1.2rem;
+  border: 1px solid #cbd5e1;
+  background: white;
+  color: #374151;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-weight: 500;
+}
+.filter-btn:hover {
+  background: #f3f4f6;
+}
+.filter-btn.active {
+  background: #044733;
+  color: white;
+  border-color: #044733;
+}
+
+/* Page Title */
+.page-title {
+  font-size: 2.1rem;
+  color: #044733;
+  margin: 0 0 1.2rem 0;
+  font-weight: bold;
+}
+
+/* Chart Card */
+.chart-card {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.2rem 1.2rem 1rem 1.2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin-bottom: 1.5rem;
+}
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.chart-header h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 1.18rem;
+}
+.export-btn {
+  padding: 0.5rem 1rem;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 1rem;
+}
+.export-btn:hover {
+  background: #f3f4f6;
+}
+
+/* Recent Transactions section */
+.recent-transactions {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.recent-transactions h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+  color: #111827;
+  margin-bottom: 0.7rem;
+}
+
+/* Table styles */
+.transactions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.97rem;
+}
+.transactions-table th,
+.transactions-table td {
+  padding: 0.6rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+}
+.transactions-table th {
+  background-color: #f3f4f6;
+  color: #374151;
+  font-weight: 600;
+}
+.transactions-table tr:last-child td {
+  border-bottom: none;
+}
+.transactions-table tbody tr:nth-child(odd) {
+  background: #ffffff;
+}
+.transactions-table tbody tr:nth-child(even) {
+  background: #fafafa;
+}
+
+/* Remove excess vertical space */
+.admin-container > section:not(:last-child) {
+  margin-bottom: 1rem;
+}
+
+/* Messages */
+.message {
+  text-align: center;
+  color: #6b7280;
+  margin: 1.2rem 0;
+}
+.message.error {
+  color: #b91c1c;
+}
+
+/* Responsive for smaller screens */
+@media (max-width: 1100px) {
+  .dashboard-top-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.7rem;
+  }
+  .period-toggle-vertical {
+    flex-direction: row;
+    margin-left: 0;
+    margin-top: 0.6rem;
+    gap: 0.6rem;
+    align-self: flex-end;
+  }
+  .stats-cards {
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+}
+@media (max-width: 800px) {
+  .admin-container {
+    padding: 0.7rem 0.5rem;
+  }
+  .chart-card,
+  .recent-transactions {
+    padding: 0.7rem;
+  }
+  .stat-card {
+    padding: 1rem 0.7rem;
+  }
+}
+@media (max-width: 600px) {
+  .sidebar {
+    width: 100px;
+    padding: 0.5rem 0;
+  }
+  .sidebar-logo {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+  }
+  .sidebar-link {
+    font-size: 0.9rem;
+    padding: .6rem 0.8rem;
+    border-radius: 0 1.3rem 1.3rem 0;
+  }
+}
+
+/*ANALYSIS*/
+.analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.analysis-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.analysis-card h2 {
+  margin: 0 0 16px 0;
+  color: #1f2937;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+/* Conversion Rate Card */
+.conversion-card .subtitle {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin-bottom: 20px;
+}
+
+.conversion-rate-display {
+  text-align: center;
+}
+
+.rate-number {
+  font-size: 3rem;
+  font-weight: bold;
+  color: #047857;
+  margin-bottom: 16px;
+}
+
+.rate-bar {
+  width: 100%;
+  height: 12px;
+  background-color: #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.rate-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #047857, #10b981);
+  transition: width 0.5s ease-in-out;
+}
+
+/* Geo Mapping Card */
+.geo-card {
+  grid-column: span 2;
+}
+
+.singapore-map {
+  position: relative;
+  width: 100%;
+  height: 400px;
+}
+
+.map-svg {
+  width: 100%;
+  height: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.map-legend {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  border: 1px solid #e5e7eb;
+}
+
+.legend-title {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.legend-items {
+  display: flex;
+  gap: 8px;
+}
+
+.legend-items span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* Top Products Card */
+.products-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.product-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.product-rank {
+  background: #047857;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.875rem;
+}
+
+.product-info {
+  flex: 1;
+}
+
+.product-name {
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.product-sales {
+  color: #047857;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.product-units {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+/* Category Performance Card */
+.category-card {
+  min-height: 400px;
+}
+
+/* Region Sales Card */
+.region-sales-card {
+  grid-column: span 2;
+  min-height: 400px;
+}
+
+/* No Data Message */
+.no-data-message {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6b7280;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.no-data-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.no-data-message p {
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.no-data-message small {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  max-width: 300px;
+  line-height: 1.4;
+}
+
+/* Loading styles */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e7eb;
+  border-top: 4px solid #047857;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.message {
+  color: #6b7280;
+  font-size: 1.1rem;
+}
+@media (max-width: 1200px) {
+  .geo-card,
+  .region-sales-card {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .analysis-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .analysis-card {
+    padding: 16px;
+  }
+  
+  .rate-number {
+    font-size: 2.5rem;
+  }
+}
