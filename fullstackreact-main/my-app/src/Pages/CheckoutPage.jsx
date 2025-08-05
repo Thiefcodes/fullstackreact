@@ -1,6 +1,50 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
+
+const StripePaymentForm = ({ clientSecret, onSuccessfulPayment }) => {
+    const stripe = useStripe();
+    const elements = useElements();
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [error, setError] = useState(null);
+
+    const handleSubmit = async (event) => {
+        event.preventDefault();
+        if (!stripe || !elements || !clientSecret) {
+            setError("Payment system is not ready. Please wait a moment.");
+            return;
+        }
+        setIsProcessing(true);
+        setError(null);
+
+        const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+            payment_method: { card: elements.getElement(CardElement) }
+        });
+
+        if (stripeError) {
+            setError(stripeError.message || "An unexpected error occurred.");
+            setIsProcessing(false);
+        } else if (paymentIntent.status === 'succeeded') {
+            onSuccessfulPayment({ method: 'Stripe', id: paymentIntent.id });
+        }
+    };
+
+    return (
+        <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
+            <CardElement options={{ style: { base: { fontSize: '16px', '::placeholder': { color: '#aab7c4' } } } }} />
+            <button type="submit" disabled={!stripe || isProcessing || !clientSecret} style={{ width: '100%', padding: '15px', marginTop: '20px', background: 'green', color: 'white', border: 'none', fontSize: '1.2em', cursor: 'pointer', opacity: (!stripe || isProcessing || !clientSecret) ? 0.6 : 1 }}>
+                {isProcessing ? 'Processing...' : 'Pay Now'}
+            </button>
+            {error && <div style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
+            {!clientSecret && !isProcessing && <div style={{ color: 'orange', marginTop: '10px' }}>Initializing secure payment...</div>}
+        </form>
+    );
+};
 
 const CheckoutPage = () => {
     const location = useLocation();
@@ -17,6 +61,38 @@ const CheckoutPage = () => {
     const subtotal = useMemo(() => itemsToCheckout.reduce((total, item) => total + parseFloat(item.displayPrice), 0), [itemsToCheckout]);
     const shippingFee = useMemo(() => deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0, [deliveryMethod]);
     const totalPrice = useMemo(() => (subtotal + shippingFee).toFixed(2), [subtotal, shippingFee]);
+
+    const [clientSecret, setClientSecret] = useState('');
+
+    useEffect(() => {
+        if (paymentMethod === 'CreditCard' && itemsToCheckout.length > 0) {
+            axios.post('http://localhost:5000/api/create-payment-intent', { items: itemsToCheckout, deliveryMethod })
+                .then(res => {
+                    setClientSecret(res.data.clientSecret);
+                })
+                .catch(err => {
+                    console.error("Error fetching Stripe client secret:", err);
+                    alert("Could not initialize card payment. Please select another method or try again.");
+                });
+        }
+    }, [itemsToCheckout, deliveryMethod, paymentMethod]);
+
+    const completeOrder = async (paymentDetails) => {
+        const userId = localStorage.getItem('userId');
+        setIsProcessing(true);
+        try {
+            const response = await axios.post('http://localhost:5000/api/orders', {
+                userId, items: itemsToCheckout, totalPrice, deliveryMethod, shippingFee, paymentDetails
+            });
+            alert("Payment successful! Your order has been placed.");
+            // Navigate to a new success page with the order details
+            navigate('/order-success', { state: { order: response.data } });
+        } catch (err) {
+            alert("Failed to place order.");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
 
     const handlePayNow = async () => {
         const userId = localStorage.getItem('userId');
@@ -136,10 +212,32 @@ const CheckoutPage = () => {
                         </label>
                     </div>
                 </div>
+                
+                {/* Conditional rendering of payment forms */}
+                {paymentMethod === 'CreditCard' && (
+                    <Elements stripe={stripePromise}>
+                        <StripePaymentForm clientSecret={clientSecret} onSuccessfulPayment={completeOrder} />
+                    </Elements>
+                )}
 
-                <button onClick={handlePayNow} disabled={isProcessing} style={{ width: '100%', padding: '15px', marginTop: '30px', background: 'green', color: 'white', border: 'none', fontSize: '1.2em', cursor: 'pointer' }}>
-                    {isProcessing ? 'Processing...' : 'Pay Now'}
-                </button>
+                {paymentMethod === 'PayPal' && (
+                    <div style={{ marginTop: '20px' }}>
+                        <PayPalScriptProvider options={{ "client-id": import.meta.env.VITE_PAYPAL_CLIENT_ID || 'sb' }}>
+                            <PayPalButtons
+                                style={{ layout: "vertical" }}
+                                createOrder={async () => {
+                                    const res = await axios.post('http://localhost:5000/api/paypal/create-order', { items: itemsToCheckout, deliveryMethod });
+                                    return res.data.orderID;
+                                }}
+                                onApprove={async (data) => {
+                                    await axios.post('http://localhost:5000/api/paypal/capture-order', { orderID: data.orderID });
+                                    completeOrder({ method: 'PayPal', id: data.orderID });
+                                }}
+                            />
+                        </PayPalScriptProvider>
+                    </div>
+                )}
+
             </div>
         </div>
     );
