@@ -18,7 +18,7 @@
     "leaflet": "^1.9.4",
     "multer": "^2.0.1",
     "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.4",
+    "nodemailer": "^7.0.5",
     "openai": "^5.11.0",
     "pg": "^8.8.0",
     "react-leaflet": "^5.0.0",
