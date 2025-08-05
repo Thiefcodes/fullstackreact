@@ -20,6 +20,7 @@
     padding-top: 2rem;
     width: 100%;
 }
+
 .sidebar-nav ul { list-style: none; padding: 0; margin: 0; }
 .sidebar-nav li { margin-bottom: 1rem; }
 .sidebar-nav a, .category-toggle {
@@ -241,4 +242,15 @@
 
 .wishlist-button:hover .heart-icon {
     fill: red;
+}
+.price-display { 
+    display: flex; justify-content: center; align-items: baseline; gap: 0.5rem; 
+}
+
+.discount-price { 
+    color: #ef4444; font-weight: 700; font-size: 1.1rem; 
+}
+
+.original-price { 
+    color: #6b7280; text-decoration: line-through; font-size: 0.9rem; 
 }

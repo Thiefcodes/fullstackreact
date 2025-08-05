@@ -27,7 +27,7 @@ import MyListings          from './Pages/MyListings';
 // Your New Pages
 import EcommercePage       from './pages/EcommercePage';
 import ProductDetailsPage  from './pages/ProductDetailsPage';
-import WishlistPage            from './pages/WishlistPage';
+import WishlistPage         from './pages/WishlistPage';
 // Admin / Staff
 import UserManagement     from './pages/UserManagement';
 import ProductManagement   from './Pages/ProductManagement';

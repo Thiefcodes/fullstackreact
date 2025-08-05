@@ -241,3 +241,16 @@
 .wishlist-button:hover .heart-icon {
     fill: red;
 }
+
+.price-display { 
+    display: flex; align-items: baseline; gap: 0.5rem; 
+}
+.wishlist-item-price { 
+    font-size: 1.5rem; font-weight: bold; margin: 0; 
+}
+.discount-price { 
+    color: rgb(255, 0, 0); font-size: 1.5rem; font-weight: bold; -webkit-text-stroke: 0.1px black; 
+}
+.original-price { 
+    color: #d1d5db; text-decoration: line-through; 
+}
