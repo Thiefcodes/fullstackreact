@@ -177,3 +177,31 @@
 .original-price1 {
      color: #6b7280; text-decoration: line-through; font-size: 1.25rem; 
 }
+
+.star-rating-container {
+    display: flex;
+    align-items: center;
+    gap: 0.1rem;
+}
+
+.star-icon {
+    width: 20px; 
+    height: 20px;
+}
+
+.star-icon.filled {
+    color: darkgreen; 
+}
+
+.star-icon.empty {
+    color: #d1d5db; /* Light gray for empty stars */
+}
+
+/* Existing styles for context */
+.reviews-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    color: #4b5563;
+}

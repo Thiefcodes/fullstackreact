@@ -2133,24 +2133,45 @@ app.put('/api/variants/:variantId/stock', async (req, res) => {
 // =================================================================
 
 app.get('/api/shop/products', async (req, res) => {
-    const { category, search, page = 1, limit = 9 } = req.query;
+    const { category, search, page = 1, limit = 9, minPrice, maxPrice, onSale, sortBy } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     let queryParams = [];
-    let whereClauses = ["EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active')"];
-    if (category) { /* ... */ }
-    if (search) { /* ... */ }
-    const whereString = `WHERE ${whereClauses.join(' AND ')}`;
+    let whereClauses = ["p.id IN (SELECT product_id FROM product_variants WHERE status = 'active')"];
 
-    // THIS QUERY IS NOW UPGRADED
+    if (category) {
+        queryParams.push(category);
+        whereClauses.push(`p.categories ILIKE $${queryParams.length}`);
+    }
+    if (search) {
+        queryParams.push(`%${search}%`);
+        whereClauses.push(`(p.product_name ILIKE $${queryParams.length} OR p.product_description ILIKE $${queryParams.length})`);
+    }
+    if (minPrice && maxPrice) {
+        queryParams.push(minPrice, maxPrice);
+        whereClauses.push(`EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id AND pv.price BETWEEN $${queryParams.length - 1} AND $${queryParams.length})`);
+    }
+    if (onSale === 'true') {
+        whereClauses.push(`EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id AND pv.discount_price IS NOT NULL)`);
+    }
+
+    const whereString = `WHERE ${whereClauses.join(' AND ')}`;
+    
+    let orderByString = 'ORDER BY p.created_at DESC';
+    if (sortBy === 'newest') {
+        orderByString = 'ORDER BY p.created_at DESC';
+    }
+
     const dataQuery = `
         SELECT 
             p.*,
             (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price,
-            (SELECT MIN(pv.discount_price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as discount_price
+            (SELECT MIN(pv.discount_price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as discount_price,
+            -- NEW: Calculate average rating for each product
+            COALESCE((SELECT AVG(rating) FROM reviews WHERE product_id = p.id), 0) as average_rating
         FROM products p
         ${whereString}
-        ORDER BY p.created_at DESC
+        ${orderByString}
         LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
     `;
     const dataParams = [...queryParams, parseInt(limit), offset];
@@ -2200,12 +2221,14 @@ app.get('/api/wishlist/ids/:userId', async (req, res) => {
 app.get('/api/wishlist/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
-        // THIS QUERY IS NOW UPGRADED
+        // THIS QUERY IS NOW UPGRADED to include average_rating
         const query = `
             SELECT 
                 p.*,
+                w.note, -- Include the user's note for the item
                 (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price,
-                (SELECT MIN(pv.discount_price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as discount_price
+                (SELECT MIN(pv.discount_price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as discount_price,
+                COALESCE((SELECT AVG(rating) FROM reviews WHERE product_id = p.id), 0) as average_rating
             FROM products p
             JOIN wishlist_items w ON p.id = w.product_id
             WHERE w.user_id = $1;
