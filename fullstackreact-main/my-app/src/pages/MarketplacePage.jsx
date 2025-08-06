@@ -99,8 +99,12 @@ const ProductCard = ({ product }) => {
             <p style={{ fontWeight: 'bold', fontSize: '1.1rem', margin: '4px 0', color: '#333' }}>${product.price}</p>
             <p style={{ color: '#666', margin: '4px 0' }}>Size: {product.size || 'N/A'}</p>
             <p style={{ fontSize: '0.9em', color: '#999' }}>
-                Sold by: <Link to={`/user/${product.seller_id}`} style={{ color: '#15342D', fontWeight: 'bold', textDecoration: 'none' }}>{product.seller_name}</Link>
+                Sold by: <Link
+                    to={`/user/${product.seller_id}`}
+                    className="marketplace-seller-link"
+                >{product.seller_name}</Link>
             </p>
+
 
             {sustainabilityScore && (
                 <div style={{

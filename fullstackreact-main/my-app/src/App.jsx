@@ -48,9 +48,6 @@ import AdminScan           from './Pages/AdminScan';
 import AdminPage           from './Pages/AdminPage';
 import AnalPage            from './Pages/AnalPage';
 import Ga4Admin          from './Pages/Ga4Admin';
-import AdminScan from './Pages/AdminScan';
-import AdminPage from './Pages/AdminPage';
-import AnalPage from './Pages/AnalPage';
 import AiDashboard from './Pages/AiDashboard';
 
 import Logo from "./assets/EcoThrift-logo.png";
@@ -198,10 +195,10 @@ const App = () => {
                                   Approve Listings
                               </Link>
                               <Link to="/AdminScan" className="navbar-link" onClick={() => setOpenDropdown(null)}>
-                                  Admin scan dont remove this
+                                  Clothing Scanner
                               </Link>
                               <Link to="/Ga4Admin" className="navbar-link" onClick={() => setOpenDropdown(null)}>
-                                  Admin scan dont remove this
+                                  Page Views
                               </Link>
                           </div>
                           <div className="navbar-auth">

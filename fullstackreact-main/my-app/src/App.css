@@ -244,3 +244,15 @@ select,
 button {
     box-sizing: border-box !important;
 }
+
+.marketplace-seller-link {
+    color: #15342D;
+    font-weight: bold;
+    text-decoration: none;
+    transition: color 0.18s;
+}
+
+    .marketplace-seller-link:hover, .marketplace-seller-link:focus {
+        color: #41cba7;
+        text-decoration: underline;
+    }
