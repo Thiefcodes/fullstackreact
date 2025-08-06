@@ -57,46 +57,112 @@ const MyPurchases = () => {
     };
 
     return (
-        <div style={{ maxWidth: '900px', margin: '0 auto', padding: '20px' }}>
-            <h1>My Purchases</h1>
-            <div style={{ 
-                    backgroundColor: '#4CAF50',
-                    color: 'white',
-                    padding: '8px 16px',
-                    borderRadius: '20px',
-                    fontWeight: 'bold'
-                }}>
-                    Sustainability Points: {points}
-            </div>
-            {orders.length > 0 ? (
-                orders.map(order => {
-                    const status = getOrderStatus(order);
-                    return (
-                    <Link to={`/orders/${order.id}`} key={order.id} style={{ textDecoration: 'none', color: 'inherit' }}>
-                        <div style={{ border: '1px solid #ccc', borderRadius: '8px', padding: '15px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '20px' }}>
+        <div style={{
+        maxWidth: '960px',
+        margin: '0 auto',
+        padding: '40px 20px',
+        backgroundColor: '#f9f9f9',
+        minHeight: '100vh'
+    }}>
+        <h1 style={{
+            textAlign: 'center',
+            fontSize: '2rem',
+            color: '#15342D',
+            marginBottom: '20px'
+        }}>
+            My Purchases
+        </h1>
+
+        <div style={{
+            backgroundColor: '#15342D',
+            color: 'white',
+            padding: '12px 20px',
+            borderRadius: '30px',
+            fontWeight: 'bold',
+            display: 'inline-block',
+            marginBottom: '30px'
+        }}>
+            Sustainability Points: {points}
+        </div>
+
+        {orders.length > 0 ? (
+            orders.map(order => {
+                const status = getOrderStatus(order);
+                return (
+                    <Link
+                        to={`/orders/${order.id}`}
+                        key={order.id}
+                        style={{
+                            textDecoration: 'none',
+                            color: 'inherit'
+                        }}
+                    >
+                        <div style={{
+                            backgroundColor: 'white',
+                            border: '1px solid #eee',
+                            borderRadius: '12px',
+                            padding: '20px',
+                            marginBottom: '20px',
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            gap: '16px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                            transition: 'transform 0.2s ease',
+                            cursor: 'pointer'
+                        }}>
                             <div style={{ display: 'flex' }}>
                                 {order.product_images?.slice(0, 4).map((img, index) => (
-                                    <img key={index} src={img || 'https://placehold.co/80x80'} alt="product" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px', marginLeft: index > 0 ? '-40px' : '0', border: '2px solid white' }} />
+                                    <img
+                                        key={index}
+                                        src={img || 'https://placehold.co/80x80'}
+                                        alt="product"
+                                        style={{
+                                            width: '80px',
+                                            height: '80px',
+                                            objectFit: 'cover',
+                                            borderRadius: '6px',
+                                            marginLeft: index > 0 ? '-35px' : '0',
+                                            border: '2px solid white',
+                                            boxShadow: '0 0 4px rgba(0,0,0,0.1)'
+                                        }}
+                                    />
                                 ))}
                             </div>
-                            <div style={{ flexGrow: 1 }}>
-                                <h3 style={{ margin: 0 }}>Order #{order.user_order_id}</h3>
-                                <p style={{ margin: '5px 0', color: '#555' }}>Ordered on: {new Date(order.ordered_at).toLocaleDateString()}</p>
-                                <p style={{ margin: '5px 0', fontWeight: 'bold' }}>Total: ${order.total_price}</p>
+
+                            <div style={{ flexGrow: 1, minWidth: '200px' }}>
+                                <h3 style={{ margin: '0 0 8px', color: '#15342D' }}>
+                                    Order #{order.user_order_id}
+                                </h3>
+                                <p style={{ margin: '4px 0', color: '#666' }}>
+                                    Ordered on: {new Date(order.ordered_at).toLocaleDateString()}
+                                </p>
+                                <p style={{ margin: '4px 0', fontWeight: 'bold' }}>
+                                    Total: ${order.total_price}
+                                </p>
                             </div>
+
                             <div>
-                                <span style={{ padding: '5px 10px', borderRadius: '15px', background: status.color, color: 'black' }}>
+                                <span style={{
+                                    padding: '6px 14px',
+                                    borderRadius: '20px',
+                                    backgroundColor: status.color,
+                                    fontWeight: '600',
+                                    fontSize: '0.9rem'
+                                }}>
                                     {status.text}
                                 </span>
                             </div>
                         </div>
                     </Link>
-                    )
-                })
-            ) : (
-                <p>You have not made any purchases yet.</p>
-            )}
-        </div>
+                )
+            })
+        ) : (
+            <p style={{ textAlign: 'center', fontSize: '1.1rem' }}>
+                You have not made any purchases yet.
+            </p>
+        )}
+    </div>
     );
 };
 

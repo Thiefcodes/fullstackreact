@@ -936,54 +936,63 @@ app.post('/api/marketplaceproducts', async (req, res) => {
  * @access  Public
  */
 app.get('/api/marketplaceproducts', async (req, res) => {
-    const { excludeUserId, status, seller_id, category } = req.query;
+    const { excludeUserId, status, seller_id, category, search, sort } = req.query;
 
     try {
-        let getProductsQuery;
         const queryParams = [];
-        let whereClauses = [];
+        const whereClauses = [];
 
-        // Status filtering (for staff view, etc.)
+        // Filter: status (default to 'available')
         if (status) {
             whereClauses.push(`p.status = $${queryParams.length + 1}`);
-            queryParams.push(status.toLowerCase()); // 'pending' or 'available'
+            queryParams.push(status.toLowerCase());
         } else {
-            // Default to 'available' if status is not provided (for marketplace)
             whereClauses.push(`p.status = $${queryParams.length + 1}`);
             queryParams.push('available');
         }
 
-        // Exclude seller if needed
+        // Filter: exclude seller's own items
         if (excludeUserId) {
             whereClauses.push(`p.seller_id != $${queryParams.length + 1}`);
             queryParams.push(excludeUserId);
         }
 
-        // Filter by seller if provided
+        // Filter: specific seller
         if (seller_id) {
             whereClauses.push(`p.seller_id = $${queryParams.length + 1}`);
             queryParams.push(seller_id);
         }
 
+        // Filter: category
         if (category && category !== 'All Categories') {
             whereClauses.push(`p.category = $${queryParams.length + 1}`);
             queryParams.push(category);
         }
 
+        // Filter: search keyword in title
+        if (search) {
+            whereClauses.push(`p.title ILIKE $${queryParams.length + 1}`);
+            queryParams.push(`%${search}%`);
+        }
 
+        // Determine ORDER BY clause based on sort option
+        let orderByClause = 'ORDER BY p.created_at DESC'; // Default
+        if (sort === 'PriceLowToHigh') {
+            orderByClause = 'ORDER BY p.price ASC';
+        } else if (sort === 'PriceHighToLow') {
+            orderByClause = 'ORDER BY p.price DESC';
+        }
 
-
-        getProductsQuery = `
+        const getProductsQuery = `
             SELECT p.*, u.username AS seller_name
             FROM marketplaceproducts p
             LEFT JOIN users u ON p.seller_id = u.id
-            WHERE ${whereClauses.join(' AND ')}
-            ORDER BY p.created_at DESC;
+            ${whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : ''}
+            ${orderByClause};
         `;
 
         const result = await db.query(getProductsQuery, queryParams);
         res.status(200).json(result.rows);
-
     } catch (err) {
         console.error('Error fetching products:', err.message);
         res.status(500).json({ error: 'Server error while fetching products.' });
@@ -1364,14 +1373,33 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
  */
 app.get('/api/listings/:userId', async (req, res) => {
     const { userId } = req.params;
+    // Get the optional 'status' from the query parameters (e.g., ?status=available)
+    const { status } = req.query;
+
     try {
-        const query = `
-            SELECT * FROM marketplaceproducts
-            WHERE seller_id = $1
-            ORDER BY created_at DESC;
-        `;
-        // We use parseInt here as a good practice to ensure the ID is a number.
-        const { rows } = await db.query(query, [parseInt(userId, 10)]);
+        let query;
+        const queryParams = [parseInt(userId, 10)];
+
+        // === THIS IS THE FIX ===
+        // We dynamically build the SQL query based on the presence of the 'status' parameter.
+        if (status && status !== 'all') {
+            // If a specific status is requested, add a WHERE clause for it.
+            query = `
+                SELECT * FROM marketplaceproducts
+                WHERE seller_id = $1 AND status = $2
+                ORDER BY created_at DESC;
+            `;
+            queryParams.push(status);
+        } else {
+            // If status is 'all' or not provided, fetch all listings for the user.
+            query = `
+                SELECT * FROM marketplaceproducts
+                WHERE seller_id = $1
+                ORDER BY created_at DESC;
+            `;
+        }
+
+        const { rows } = await db.query(query, queryParams);
         res.status(200).json(rows);
     } catch (err) {
         console.error('Error fetching user listings:', err.message);

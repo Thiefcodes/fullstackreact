@@ -77,24 +77,88 @@ const CreateProductPage = () => {
     };
 
     return (
-        <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
-            <h1>List a New Item</h1>
+    <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#f5f5f5',
+        padding: '40px 20px',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'flex-start'
+    }}>
+        <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+            maxWidth: '600px',
+            width: '100%',
+            padding: '30px'
+        }}>
+            <h1 style={{ fontSize: '1.8rem', color: '#15342D', marginBottom: '20px' }}>
+                List a New Item
+            </h1>
             <form onSubmit={handleSubmit}>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Title</label>
-                    <input type="text" name="title" value={formData.title} onChange={handleChange} required style={{ width: '100%', padding: '8px' }} />
+                <div style={{ marginBottom: '20px' }}>
+                    <label style={{ fontWeight: 'bold', marginBottom: '6px', display: 'block' }}>Title</label>
+                    <input
+                        type="text"
+                        name="title"
+                        value={formData.title}
+                        onChange={handleChange}
+                        required
+                        style={{
+                            width: '100%',
+                            padding: '10px',
+                            borderRadius: '8px',
+                            border: '1px solid #ccc'
+                        }}
+                    />
                 </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Description</label>
-                    <textarea name="description" value={formData.description} onChange={handleChange} style={{ width: '100%', padding: '8px', minHeight: '100px' }} />
+                <div style={{ marginBottom: '20px' }}>
+                    <label style={{ fontWeight: 'bold', marginBottom: '6px', display: 'block' }}>Description</label>
+                    <textarea
+                        name="description"
+                        value={formData.description}
+                        onChange={handleChange}
+                        style={{
+                            width: '100%',
+                            padding: '10px',
+                            minHeight: '100px',
+                            borderRadius: '8px',
+                            border: '1px solid #ccc'
+                        }}
+                    />
                 </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Price ($)</label>
-                    <input type="number" name="price" value={formData.price} onChange={handleChange} required step="0.01" style={{ width: '100%', padding: '8px' }} />
+                <div style={{ marginBottom: '20px' }}>
+                    <label style={{ fontWeight: 'bold', marginBottom: '6px', display: 'block' }}>Price ($)</label>
+                    <input
+                        type="number"
+                        name="price"
+                        value={formData.price}
+                        onChange={handleChange}
+                        required
+                        step="0.01"
+                        style={{
+                            width: '100%',
+                            padding: '10px',
+                            borderRadius: '8px',
+                            border: '1px solid #ccc'
+                        }}
+                    />
                 </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Category</label>
-                    <select name="category" value={formData.category} onChange={handleChange} required style={{ width: '100%', padding: '8px' }}>
+                <div style={{ marginBottom: '20px' }}>
+                    <label style={{ fontWeight: 'bold', marginBottom: '6px', display: 'block' }}>Category</label>
+                    <select
+                        name="category"
+                        value={formData.category}
+                        onChange={handleChange}
+                        required
+                        style={{
+                            width: '100%',
+                            padding: '10px',
+                            borderRadius: '8px',
+                            border: '1px solid #ccc'
+                        }}
+                    >
                         <option value="Tops">Tops</option>
                         <option value="Bottoms">Bottoms</option>
                         <option value="Dresses">Dresses</option>
@@ -103,9 +167,20 @@ const CreateProductPage = () => {
                         <option value="Shoes">Shoes</option>
                     </select>
                 </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Size</label>
-                    <select name="size" value={formData.size} onChange={handleChange} required style={{ width: '100%', padding: '8px' }}>
+                <div style={{ marginBottom: '20px' }}>
+                    <label style={{ fontWeight: 'bold', marginBottom: '6px', display: 'block' }}>Size</label>
+                    <select
+                        name="size"
+                        value={formData.size}
+                        onChange={handleChange}
+                        required
+                        style={{
+                            width: '100%',
+                            padding: '10px',
+                            borderRadius: '8px',
+                            border: '1px solid #ccc'
+                        }}
+                    >
                         <option value="XS">XS</option>
                         <option value="S">S</option>
                         <option value="M">M</option>
@@ -114,25 +189,87 @@ const CreateProductPage = () => {
                         <option value="XXL">XXL</option>
                     </select>
                 </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Product Images/Videos</label>
-                    <input 
-                        type="file" 
-                        name="productMedia" 
-                        multiple // Allow multiple files to be selected
-                        onChange={handleFileChange} 
-                        accept="image/*,video/*" // Accept images and videos
-                        style={{ width: '100%', padding: '8px' }} 
-                    />
-                </div>
-                <button type="submit" disabled={isSubmitting} style={{ padding: '10px 20px', cursor: 'pointer' }}>
+                <div style={{ marginBottom: '20px' }}>
+    <label style={{ fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>Product Images/Videos</label>
+
+    <div
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+            e.preventDefault();
+            const files = Array.from(e.dataTransfer.files);
+            setMediaFiles(files);
+        }}
+        style={{
+            border: '2px dashed #ccc',
+            borderRadius: '8px',
+            padding: '20px',
+            textAlign: 'center',
+            backgroundColor: '#fafafa',
+            cursor: 'pointer'
+        }}
+        onClick={() => document.getElementById('fileInput').click()}
+    >
+        <p style={{ marginBottom: '8px', color: '#888' }}>Drag & drop files here or click to select</p>
+        <input
+            id="fileInput"
+            type="file"
+            name="productMedia"
+            multiple
+            accept="image/*,video/*"
+            onChange={(e) => setMediaFiles(Array.from(e.target.files))}
+            style={{ display: 'none' }}
+        />
+    </div>
+
+    {mediaFiles.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '16px' }}>
+            {mediaFiles.map((file, index) => {
+                const url = URL.createObjectURL(file);
+                const isImage = file.type.startsWith('image/');
+                const isVideo = file.type.startsWith('video/');
+                return (
+                    <div key={index} style={{ width: '100px', height: '100px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #ddd' }}>
+                        {isImage && (
+                            <img src={url} alt={`preview-${index}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        )}
+                        {isVideo && (
+                            <video src={url} muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    )}
+</div>
+                <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    style={{
+                        padding: '12px 24px',
+                        backgroundColor: '#15342D',
+                        color: 'white',
+                        fontWeight: 'bold',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                        width: '100%',
+                        transition: 'background-color 0.3s'
+                    }}
+                    onMouseOver={(e) => {
+                        if (!isSubmitting) e.currentTarget.style.backgroundColor = '#1e4b3d';
+                    }}
+                    onMouseOut={(e) => {
+                        if (!isSubmitting) e.currentTarget.style.backgroundColor = '#15342D';
+                    }}
+                >
                     {isSubmitting ? 'Submitting...' : 'List Item'}
                 </button>
             </form>
-            {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
-            {success && <p style={{ color: 'green', marginTop: '10px' }}>{success}</p>}
+            {error && <p style={{ color: 'red', marginTop: '16px', textAlign: 'center' }}>{error}</p>}
+            {success && <p style={{ color: 'green', marginTop: '16px', textAlign: 'center' }}>{success}</p>}
         </div>
-    );
+    </div>
+);
 };
 
 export default CreateProductPage;

@@ -160,34 +160,34 @@ const MarketplacePage = () => {
     const [error, setError] = useState(null);
 
     const [selectedCategory, setSelectedCategory] = useState('All Categories');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [triggeredSearch, setTriggeredSearch] = useState('');
+    const [sortOption, setSortOption] = useState('Newest');
+
     const categories = ['All Categories', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Accessories', 'Shoes'];
 
-    useEffect(() => {
-        const fetchProducts = async () => {
-            setLoading(true); // Show loading indicator on every filter change
-            try {
-                const userId = localStorage.getItem('userId');
-                
-                // === THIS IS THE FIX (Part 2) ===
-                // Use URLSearchParams to easily build the query string.
-                const params = new URLSearchParams();
-                if (userId) {
-                    params.append('excludeUserId', userId);
-                }
-                if (selectedCategory !== 'All Categories') {
-                    params.append('category', selectedCategory);
-                }
+    const fetchProducts = async () => {
+        setLoading(true);
+        try {
+            const userId = localStorage.getItem('userId');
+            const params = new URLSearchParams();
 
-                const apiUrl = `http://localhost:5000/api/marketplaceproducts?${params.toString()}`;
-                
-                const response = await axios.get(apiUrl);
-                setProducts(response.data);
-            } catch (err) {
-                setError('Failed to load products. Please try again later.');
-            } finally {
-                setLoading(false);
-            }
-        };
+            if (userId) params.append('excludeUserId', userId);
+            if (selectedCategory !== 'All Categories') params.append('category', selectedCategory);
+            if (triggeredSearch.trim() !== '') params.append('search', triggeredSearch.trim());
+            if (sortOption) params.append('sort', sortOption);
+
+            const apiUrl = `http://localhost:5000/api/marketplaceproducts?${params.toString()}`;
+            const response = await axios.get(apiUrl);
+            setProducts(response.data);
+        } catch (err) {
+            setError('Failed to load products. Please try again later.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchProducts();
 
         const ws = new WebSocket('ws://localhost:5000');
@@ -202,7 +202,7 @@ const MarketplacePage = () => {
         };
         ws.onclose = () => console.log('Marketplace WebSocket closed');
         return () => ws.close();
-    }, [selectedCategory]);
+    }, [selectedCategory, triggeredSearch, sortOption]);
 
     if (loading) return <p>Loading products...</p>;
     if (error) return <p style={{ color: 'red' }}>{error}</p>;
@@ -210,93 +210,102 @@ const MarketplacePage = () => {
     return (
         <div style={{ padding: '40px', backgroundColor: '#f9f9f9', minHeight: '100vh' }}>
             {/* === Header Section === */}
-<div style={{
-    textAlign: 'center',
-    marginBottom: '2.5rem'
-}}>
-    <h1 style={{
-        fontSize: '2.5rem',
-        fontWeight: 'bold',
-        color: '#15342D',
-        marginBottom: '0.5rem'
-    }}>
-        Discover Pre-loved Fashion
-    </h1>
-    <p style={{
-        fontSize: '1.1rem',
-        color: '#666'
-    }}>
-        Sustainable choices for a stylish future.
-    </p>
-</div>
+            <div style={{
+                textAlign: 'center',
+                marginBottom: '2.5rem'
+            }}>
+                <h1 style={{
+                    fontSize: '2.5rem',
+                    fontWeight: 'bold',
+                    color: '#15342D',
+                    marginBottom: '0.5rem'
+                }}>
+                    Discover Pre-loved Fashion
+                </h1>
+                <p style={{
+                    fontSize: '1.1rem',
+                    color: '#666'
+                }}>
+                    Sustainable choices for a stylish future.
+                </p>
+            </div>
 
-{/* === Filter + Search Section === */}
-<div style={{
-    backgroundColor: 'white',
-    borderRadius: '12px',
-    padding: '20px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
-    marginBottom: '2rem',
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '1rem',
-    alignItems: 'center',
-    justifyContent: 'center',
-    border: '1px solid #e0e0e0'
-}}>
-    <input
-        type="text"
-        placeholder="Search for items..."
-        style={{
-            padding: '10px',
-            border: '1px solid #ccc',
-            borderRadius: '8px',
-            width: '240px',
-            flexGrow: 1,
-            fontSize: '1rem',
-            outline: 'none',
-            transition: 'border 0.3s, box-shadow 0.3s'
-        }}
-        onFocus={(e) => {
-            e.target.style.border = '1px solid #15342D';
-            e.target.style.boxShadow = '0 0 0 3px rgba(21, 52, 45, 0.2)';
-        }}
-        onBlur={(e) => {
-            e.target.style.border = '1px solid #ccc';
-            e.target.style.boxShadow = 'none';
-        }}
-    />
+            {/* === Filter + Search Section === */}
+            <div style={{
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '20px',
+                boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
+                marginBottom: '2rem',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '1rem',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid #e0e0e0'
+            }}>
+                <input
+                    type="text"
+                    placeholder="Search for items..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') setTriggeredSearch(searchQuery.trim());
+                    }}
+                    style={{
+                        padding: '10px',
+                        border: '1px solid #ccc',
+                        borderRadius: '8px',
+                        width: '240px',
+                        flexGrow: 1,
+                        fontSize: '1rem',
+                        outline: 'none',
+                        transition: 'border 0.3s, box-shadow 0.3s'
+                    }}
+                    onFocus={(e) => {
+                        e.target.style.border = '1px solid #15342D';
+                        e.target.style.boxShadow = '0 0 0 3px rgba(21, 52, 45, 0.2)';
+                    }}
+                    onBlur={(e) => {
+                        e.target.style.border = '1px solid #ccc';
+                        e.target.style.boxShadow = 'none';
+                    }}
+                />
 
-    <select
-        value={selectedCategory}
-        onChange={(e) => setSelectedCategory(e.target.value)}
-        style={{
-            padding: '10px',
-            border: '1px solid #ccc',
-            borderRadius: '8px',
-            fontSize: '1rem',
-            minWidth: '180px'
-        }}
-    >
-        {categories.map(category => (
-            <option key={category} value={category}>{category}</option>
-        ))}
-    </select>
+                <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    style={{
+                        padding: '10px',
+                        border: '1px solid #ccc',
+                        borderRadius: '8px',
+                        fontSize: '1rem',
+                        minWidth: '180px'
+                    }}
+                >
+                    {categories.map(category => (
+                        <option key={category} value={category}>{category}</option>
+                    ))}
+                </select>
 
-    <select
-        style={{
-            padding: '10px',
-            border: '1px solid #ccc',
-            borderRadius: '8px',
-            fontSize: '1rem',
-            minWidth: '180px'
-        }}
-    >
-        <option>Sort by Newest</option>
-        <option>Price: Low to High</option>
-        <option>Price: High to Low</option>
-    </select>
-</div>
+                <select
+                    value={sortOption}
+                    onChange={(e) => setSortOption(e.target.value)}
+                    style={{
+                        padding: '10px',
+                        border: '1px solid #ccc',
+                        borderRadius: '8px',
+                        fontSize: '1rem',
+                        minWidth: '180px'
+                    }}
+                >
+                    <option value="Newest">Sort by Newest</option>
+                    <option value="PriceLowToHigh">Price: Low to High</option>
+                    <option value="PriceHighToLow">Price: High to Low</option>
+                </select>
+            </div>
+
+            {/* === Product Grid === */}
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
                 {products.length > 0 ? (
                     products.map(product => (
@@ -309,5 +318,6 @@ const MarketplacePage = () => {
         </div>
     );
 };
+
 
 export default MarketplacePage;
