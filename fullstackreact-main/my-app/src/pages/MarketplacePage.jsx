@@ -10,7 +10,7 @@ const getSustainabilityColor = (score) => {
 
 // This is a simple component for displaying a single product card.
 // We can keep it in the same file for simplicity or move it to its own file later.
-const ProductCard = ({ product }) => {
+const ProductCard = ({ product, refreshCartCount }) => {
     const [isHovered, setIsHovered] = useState(false);
     const [mediaIndex, setMediaIndex] = useState(0);
     const [sustainabilityScore, setSustainabilityScore] = useState(null);
@@ -368,7 +368,7 @@ const MarketplacePage = () => {
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
                 {products.length > 0 ? (
                     products.map(product => (
-                        <ProductCard key={product.id} product={product} />
+                        <ProductCard key={product.id} product={product} refreshCartCount={refreshCartCount} />
                     ))
                 ) : (
                     <p>No products available right now.</p>
