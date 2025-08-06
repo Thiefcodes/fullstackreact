@@ -7,7 +7,10 @@ import RegisterModal from './components/RegisterModal';
 import './app.css'
 import CartImg from './assets/cart-icon.png';
 import 'leaflet/dist/leaflet.css'; // <-- This line is correctly added
+import ReactGA from "react-ga4";
 
+import { useLocation } from "react-router-dom";
+ReactGA.initialize("G-7JL1ZGYBM4");
 // === Page Imports ===
 // Auth / Public
 import UserProfile   from './pages/UserProfile';
@@ -20,14 +23,19 @@ import MarketplacePage   from './pages/MarketplacePage';
 import CreateProductPage from './pages/CreateProductPage';
 import CartPage            from './Pages/CartPage';
 import PublicUserProfile from './Pages/PublicUserProfile';
-import CheckoutPage        from './Pages/CheckoutPage';
-import MyPurchases     from './pages/MyPurchases';
-import OrderDelivery       from './pages/OrderDelivery';
-import MyListings          from './Pages/MyListings';
+
+import CheckoutPage      from './pages/CheckoutPage';
+import MyPurchases       from './pages/MyPurchases'; 
+import OrderDelivery     from './pages/OrderDelivery'; 
+import MyListings        from './Pages/MyListings';
+import VoucherRedemption from './pages/VoucherRedemption';
+import MyVouchers from './pages/MyVouchers';
+
 // Your New Pages
 import EcommercePage       from './pages/EcommercePage';
 import ProductDetailsPage  from './pages/ProductDetailsPage';
-import WishlistPage            from './pages/WishlistPage';
+import WishlistPage         from './pages/WishlistPage';
+import OrderSuccessPage from './Pages/OrderSuccessPage';
 // Admin / Staff
 import UserManagement from './pages/UserManagement';
 import ProductManagement from './Pages/ProductManagement';
@@ -36,13 +44,28 @@ import CreateProduct from './Pages/CreateProduct';
 import StockUp from './Pages/StockUp';
 import ApproveListing from './pages/ApproveListing';
 import EditProduct from './Pages/EditProduct';
+import AdminScan           from './Pages/AdminScan';
+import AdminPage           from './Pages/AdminPage';
+import AnalPage            from './Pages/AnalPage';
+import Ga4Admin          from './Pages/Ga4Admin';
 import AdminScan from './Pages/AdminScan';
 import AdminPage from './Pages/AdminPage';
 import AnalPage from './Pages/AnalPage';
-import AiDashboard from './Pages/AiDashboard'; // <-- The new import
-
+import AiDashboard from './Pages/AiDashboard';
 
 import Logo from "./assets/EcoThrift-logo.png";
+
+function GAListener() {
+  usePageViews();
+  return null;
+}
+
+function usePageViews() {
+  const location = useLocation();
+  useEffect(() => {
+    ReactGA.send({ hitType: "pageview", page: location.pathname + location.search });
+  }, [location]);
+}
 
 const App = () => {
   const isLoggedIn = !!localStorage.getItem('userId');
@@ -73,6 +96,8 @@ const App = () => {
 
   return (
     <Router>
+    <GAListener />
+        
           <nav className="main-navbar">
                   <img src={Logo} alt="Logo" className="navbar-logo" />
 
@@ -101,6 +126,10 @@ const App = () => {
                               Marketplace
                           </Link>
 
+                            <Link to="/redeem-vouchers" className="navbar-link" onClick={() => setOpenDropdown(null)}>
+                              Voucher Redemption
+                          </Link>
+
                           {/* Selling Dropdown */}
                           <div className="dropdown" onMouseEnter={() => setOpenDropdown('selling')} onMouseLeave={() => setOpenDropdown(null)}>
                               <a href="#" className="dropbtn" ref={sellingBtnRef} onClick={e => e.preventDefault()}>Selling</a>
@@ -108,6 +137,7 @@ const App = () => {
                                   <div className="dropdown-content">
                                       <Link to="/products/new" onClick={() => setOpenDropdown(null)}>List an Item</Link>
                                       <Link to="/listings" onClick={() => setOpenDropdown(null)}>My Listings</Link>
+                                        <Link to="/my-vouchers" onClick={() => setOpenDropdown(null)}>My Vouchers</Link>
                                   </div>
                               )}
                           </div>
@@ -141,21 +171,44 @@ const App = () => {
                   )}
 
                   {/* Staff Navbar */}
-                  {isLoggedIn && userType === 'Staff' && (
-                      <>
-                          <div className="navbar-group">
-                              <Link to="/admin/dashboard" className="navbar-link">Dashboard</Link>
-                              <Link to="/products" className="navbar-link">Manage Products</Link>
-                              <Link to="/inventory" className="navbar-link">Manage Inventory</Link>
-                              <Link to="/usermanagement" className="navbar-link">Manage Users</Link>
-                              <Link to="/approvallisting" className="navbar-link">Approve Listings</Link>
-                              <Link to="/AdminScan" className="navbar-link">Admin scan dont remove this</Link>
-                          </div>
-                          <div className="navbar-auth">
-                              <button className="logout-btn" onClick={handleLogout}>Logout</button>
-                          </div>
-                      </>
-                  )}
+                  {isLoggedIn && userType === 'Staff' && (
+                      <>
+                          <div className="navbar-group">
+                              <Link to="/admin/dashboard" className="navbar-link" onClick={() => setOpenDropdown(null)}>
+                                  Dashboard
+                              </Link>
+
+                              {/* Manage Dropdown */}
+                              <div
+                                  className="dropdown"
+                                  onMouseEnter={() => setOpenDropdown('manage')}
+                                  onMouseLeave={() => setOpenDropdown(null)}
+                              >
+                                  <a href="#" className="dropbtn" onClick={e => e.preventDefault()}>Manage</a>
+                                  {openDropdown === 'manage' && (
+                                      <div className="dropdown-content">
+                                          <Link to="/products" onClick={() => setOpenDropdown(null)}>Manage Products</Link>
+                                          <Link to="/inventory" onClick={() => setOpenDropdown(null)}>Manage Inventory</Link>
+                                          <Link to="/usermanagement" onClick={() => setOpenDropdown(null)}>Manage Users</Link>
+                                      </div>
+                                  )}
+                              </div>
+
+                              <Link to="/approvallisting" className="navbar-link" onClick={() => setOpenDropdown(null)}>
+                                  Approve Listings
+                              </Link>
+                              <Link to="/AdminScan" className="navbar-link" onClick={() => setOpenDropdown(null)}>
+                                  Admin scan dont remove this
+                              </Link>
+                              <Link to="/Ga4Admin" className="navbar-link" onClick={() => setOpenDropdown(null)}>
+                                  Admin scan dont remove this
+                              </Link>
+                          </div>
+                          <div className="navbar-auth">
+                              <button className="logout-btn" onClick={handleLogout}>Logout</button>
+                          </div>
+                      </>
+                  )}
           </nav>
 
           {/* Login and Register Modals */}
@@ -175,17 +228,7 @@ const App = () => {
           <Route path="/editprofile"       element={<EditProfile />} />
           <Route path="/changepassword"       element={<ChangePassword />} />
          <Route path="/mixandmatch"            element={<MixAndMatch />} />
-
-      {/* Team */}
-          <Route path="/marketplace"       element={<MarketplacePage />} />
-          <Route path="/products/new"     element={<CreateProductPage />} />
-          <Route path="/cart"                 element={<CartPage />} />
-          <Route path="/checkout"             element={<CheckoutPage />} />
-          <Route path="/users/:userId"     element={<ViewUserProfile />} />
-          <Route path="/user/:userId"         element={<PublicUserProfile />} />
-          <Route path="/purchases"         element={<MyPurchases />} />
-          <Route path="/orders/:orderId"   element={<OrderDelivery />} />
-          <Route path="/listings"             element={<MyListings />} />
+          <Route path="/order-success"   element={<OrderSuccessPage />} />
 
           {/* Admin / Staff */}
           <Route path="/admin/dashboard"   element={<AdminPage />} />
@@ -199,12 +242,26 @@ const App = () => {
           <Route path="/products/edit/:id" element={<EditProduct />} />
           <Route path="/AdminScan"   element={<AdminScan />} />
           <Route path="/admin/ai" element={<AiDashboard />} /> {/* <-- Add this new route */}
+          <Route path="/Ga4Admin"   element={<Ga4Admin />} />
 
-          {/* Fallback */}
-          <Route path="*" element={<div style={{ padding: '2rem' }}><h2>404 — Not Found</h2></div>} />
-      </Routes>
-    </Router>
-  );
+          {/* Team */}
+        <Route path="/marketplace"     element={<MarketplacePage />} />
+        <Route path="/products/new"    element={<CreateProductPage />} />
+        <Route path="/cart"            element={<CartPage />} />
+        <Route path="/checkout"        element={<CheckoutPage />} />
+        <Route path="/users/:userId"   element={<ViewUserProfile />} />
+        <Route path="/user/:userId"    element={<PublicUserProfile />} />
+        <Route path="/purchases"       element={<MyPurchases />} /> 
+        <Route path="/orders/:orderId" element={<OrderDelivery />} /> 
+        <Route path="/listings"        element={<MyListings />} />
+        <Route path="/redeem-vouchers" element={<VoucherRedemption />} />
+        <Route path="/my-vouchers" element={<MyVouchers />} />
+
+        {/* Fallback */}
+        <Route path="*" element={<div style={{ padding: '2rem' }}><h2>404 — Not Found</h2></div>} />
+      </Routes>
+    </Router>
+  );
 };
 
 export default App;

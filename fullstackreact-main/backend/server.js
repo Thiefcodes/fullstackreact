@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { BetaAnalyticsDataClient } = require('@google-analytics/data');
 const express = require('express');
 const cors = require('cors');
 const { Client } = require('pg'); // [OLD CODE]
@@ -9,12 +10,30 @@ const nodemailer = require('nodemailer');
 const { WebSocketServer } = require('ws');
 const fs = require('fs');
 const path = require('path');
+const { analyzeSustainability, analyzeSustainabilityByText } = require('./gemini');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const paypal = require('@paypal/checkout-server-sdk');
+const pdfkit = require('pdfkit');
+
+const broadcast = (data) => {
+    wss.clients.forEach((client) => {
+        if (client.readyState === client.OPEN) {
+            client.send(JSON.stringify(data));
+        }
+    });
+};
+
+const environment = new paypal.core.SandboxEnvironment(
+    process.env.PAYPAL_CLIENT_ID,
+    process.env.PAYPAL_CLIENT_SECRET
+);
+const paypalClient = new paypal.core.PayPalHttpClient(environment);
 const { spawn } = require('child_process');
 
 app.use(cors());
 app.use(express.json());
 const { OpenAI } = require('openai');
-const openai = new OpenAI({ apiKey: "" });
+const openai = new OpenAI({ apiKey: " change here" });
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -27,6 +46,34 @@ const transporter = nodemailer.createTransport({
 const db = new Pool({
   connectionString: "postgresql://postgres.nlquunjntkcatxdzgwtc:22062004Ee!1@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?pool_mode=session",
   ssl: { rejectUnauthorized: false }
+});
+
+
+const analyticsDataClient = new BetaAnalyticsDataClient({
+  keyFilename: "file path for secret key change here"
+});
+
+app.get('/api/ga4/pageviews', async (req, res) => {
+  console.log('===> /api/ga4/pageviews called!');
+  const propertyId = "499880704";
+  try {
+    console.log('===> Attempting to call GA4...');
+    const [response] = await analyticsDataClient.runReport({
+      property: `properties/${propertyId}`,
+      dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
+      dimensions: [{ name: 'pagePath' }],
+      metrics: [{ name: 'screenPageViews' }]
+    });
+    console.log('===> GA4 call succeeded!');
+    const data = response.rows.map(row => ({
+      pagePath: row.dimensionValues[0].value,
+      views: row.metricValues[0].value
+    }));
+    res.json(data);
+  } catch (err) {
+    console.error('GA4 pageviews error:', err, err?.message, err?.stack);
+    res.status(500).json({ error: "Failed to fetch GA4 data", details: err?.message || err });
+  }
 });
 
 
@@ -223,6 +270,47 @@ const unifiedStorage = multer.diskStorage({
     }
 });
 const unifiedUpload = multer({ storage: unifiedStorage });
+
+const generateReceiptPdf = (orderId, orderDetails) => {
+    return new Promise((resolve, reject) => {
+        const doc = new pdfkit({ size: 'A4', margin: 50 });
+        const invoicesDir = path.join(__dirname, 'invoices');
+        
+      
+        if (!fs.existsSync(invoicesDir)) {
+            fs.mkdirSync(invoicesDir);
+        }
+        
+        const filePath = path.join(invoicesDir, `receipt-${orderId}.pdf`);
+        const stream = fs.createWriteStream(filePath);
+
+        doc.pipe(stream);
+
+        doc.fontSize(20).text('EcoThrift Receipt', { align: 'center' });
+        doc.fontSize(10).text(`Order ID: ${orderId}`, { align: 'center' });
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, { align: 'center' });
+        doc.moveDown(2);
+
+        doc.fontSize(14).text('Order Summary', { underline: true });
+        doc.moveDown();
+
+        orderDetails.items.forEach(item => {
+            doc.fontSize(12).text(`${item.name} (Size: ${item.size})`);
+            doc.fontSize(10).text(`$${parseFloat(item.displayPrice).toFixed(2)}`, { align: 'right' });
+            doc.moveDown(0.5);
+        });
+        
+        doc.moveDown();
+        doc.fontSize(12).text(`Subtotal: $${orderDetails.subtotal.toFixed(2)}`, { align: 'right' });
+        doc.text(`Shipping: $${orderDetails.shippingFee.toFixed(2)}`, { align: 'right' });
+        doc.fontSize(14).font('Helvetica-Bold').text(`Total: $${parseFloat(orderDetails.totalPrice).toFixed(2)}`, { align: 'right' });
+        
+        doc.end();
+
+        stream.on('finish', () => resolve(filePath));
+        stream.on('error', reject);
+    });
+};
 
 app.use('/uploads', express.static('uploads'));
 
@@ -819,20 +907,52 @@ app.post('/api/marketplaceproducts', async (req, res) => {
   try {
     const { seller_id, title, description, price, category, size, image_url } = req.body;
 
-    // Basic validation
     if (!seller_id || !title || !price || !category) {
-      return res.status(400).json({ error: 'Missing required fields: seller_id, title, price, category.' });
+      return res.status(400).json({ error: 'Missing required fields.' });
     }
 
+    // Step 1: Insert the product into the database
     const newProductQuery = `
       INSERT INTO marketplaceproducts (seller_id, title, description, price, category, size, image_url, status)
       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
       RETURNING *;
     `;
-    const values = [seller_id, title, description, price, category, size, image_url];
-
+    const values = [parseInt(seller_id, 10), title, description, price, category, size, image_url];
     const result = await db.query(newProductQuery, values);
-    res.status(201).json(result.rows[0]);
+    const newProduct = result.rows[0];
+
+    // Step 2: Immediately respond to the user
+    res.status(201).json(newProduct);
+
+    // Step 3: Asynchronously analyze sustainability using title and description
+    analyzeSustainabilityByText(title, description)
+      .then(sustainabilityData => {
+        if (sustainabilityData && sustainabilityData.score) {
+          console.log(`AI Sustainability Score for product #${newProduct.id}: ${sustainabilityData.score}/10`);
+          
+          // Save to product_sustainability table
+          const insertQuery = `
+            INSERT INTO product_sustainability (product_id, score, analysis_text)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (product_id) DO UPDATE SET score = $2, analysis_text = $3
+          `;
+          
+          return db.query(insertQuery, [newProduct.id, sustainabilityData.score, sustainabilityData.analysis]);
+        }
+      })
+      .then(() => {
+        // Broadcast the update to all clients
+        return db.query('SELECT * FROM marketplaceproducts WHERE id = $1', [newProduct.id]);
+      })
+      .then(updatedResult => {
+        if (updatedResult && updatedResult.rows.length > 0) {
+          broadcast({
+            type: 'PRODUCT_SCORE_UPDATE',
+            product: updatedResult.rows[0]
+          });
+        }
+      })
+      .catch(err => console.error(`Sustainability analysis failed for product #${newProduct.id}:`, err));
 
   } catch (err) {
     console.error('Error creating product:', err.message);
@@ -846,47 +966,63 @@ app.post('/api/marketplaceproducts', async (req, res) => {
  * @access  Public
  */
 app.get('/api/marketplaceproducts', async (req, res) => {
-    const { excludeUserId, status, seller_id } = req.query;
+    const { excludeUserId, status, seller_id, category, search, sort } = req.query;
 
     try {
-        let getProductsQuery;
         const queryParams = [];
-        let whereClauses = [];
+        const whereClauses = [];
 
-        // Status filtering (for staff view, etc.)
+        // Filter: status (default to 'available')
         if (status) {
             whereClauses.push(`p.status = $${queryParams.length + 1}`);
-            queryParams.push(status.toLowerCase()); // 'pending' or 'available'
+            queryParams.push(status.toLowerCase());
         } else {
-            // Default to 'available' if status is not provided (for marketplace)
             whereClauses.push(`p.status = $${queryParams.length + 1}`);
             queryParams.push('available');
         }
 
-        // Exclude seller if needed
+        // Filter: exclude seller's own items
         if (excludeUserId) {
             whereClauses.push(`p.seller_id != $${queryParams.length + 1}`);
             queryParams.push(excludeUserId);
         }
 
-        // Filter by seller if provided
+        // Filter: specific seller
         if (seller_id) {
             whereClauses.push(`p.seller_id = $${queryParams.length + 1}`);
             queryParams.push(seller_id);
         }
 
+        // Filter: category
+        if (category && category !== 'All Categories') {
+            whereClauses.push(`p.category = $${queryParams.length + 1}`);
+            queryParams.push(category);
+        }
 
-        getProductsQuery = `
+        // Filter: search keyword in title
+        if (search) {
+            whereClauses.push(`p.title ILIKE $${queryParams.length + 1}`);
+            queryParams.push(`%${search}%`);
+        }
+
+        // Determine ORDER BY clause based on sort option
+        let orderByClause = 'ORDER BY p.created_at DESC'; // Default
+        if (sort === 'PriceLowToHigh') {
+            orderByClause = 'ORDER BY p.price ASC';
+        } else if (sort === 'PriceHighToLow') {
+            orderByClause = 'ORDER BY p.price DESC';
+        }
+
+        const getProductsQuery = `
             SELECT p.*, u.username AS seller_name
             FROM marketplaceproducts p
             LEFT JOIN users u ON p.seller_id = u.id
-            WHERE ${whereClauses.join(' AND ')}
-            ORDER BY p.created_at DESC;
+            ${whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : ''}
+            ${orderByClause};
         `;
 
         const result = await db.query(getProductsQuery, queryParams);
         res.status(200).json(result.rows);
-
     } catch (err) {
         console.error('Error fetching products:', err.message);
         res.status(500).json({ error: 'Server error while fetching products.' });
@@ -1034,9 +1170,8 @@ app.post('/api/orders', async (req, res) => {
     const client = await db.connect();
 
     try {
-        await client.query('BEGIN'); // START THE TRANSACTION
+        await client.query('BEGIN');
 
-        // 1. Create a single entry in the 'orders' table (this logic is mostly the same)
         const orderQuery = `
             INSERT INTO orders (buyer_id, total_price, delivery_method, shipping_fee, user_order_id)
             VALUES ($1, $2, $3, $4, (SELECT COUNT(*) FROM orders WHERE buyer_id = $1) + 1)
@@ -1045,55 +1180,95 @@ app.post('/api/orders', async (req, res) => {
         const orderResult = await client.query(orderQuery, [userId, totalPrice, deliveryMethod, shippingFee]);
         const newOrderId = orderResult.rows[0].id;
 
-        // 2. Loop through all items and process them based on their type
+        let totalSustainabilityPoints = 0;
         for (const item of items) {
-            // Insert into the new, flexible order_items table
             const orderItemQuery = `
                 INSERT INTO order_items (order_id, purchased_item_id, item_type, price_at_purchase)
                 VALUES ($1, $2, $3, $4);
             `;
             await client.query(orderItemQuery, [newOrderId, item.id, item.type, item.price]);
 
-            // 3. Update inventory based on the item type
             if (item.type === 'marketplace') {
-                // For marketplace items, mark as 'sold'
-                const updateMarketplaceQuery = `
-                    UPDATE marketplaceproducts SET status = 'sold' WHERE id = $1 AND status = 'available';
-                `;
+                const updateMarketplaceQuery = `UPDATE marketplaceproducts SET status = 'sold' WHERE id = $1 AND status = 'available';`;
                 const result = await client.query(updateMarketplaceQuery, [item.id]);
                 if (result.rowCount === 0) throw new Error(`Marketplace item "${item.name}" is no longer available.`);
-                
-                // Delete from the marketplace cart
                 await client.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id = $2', [userId, item.id]);
-
+                
+                const sustainabilityResult = await client.query('SELECT score FROM product_sustainability WHERE product_id = $1', [item.id]);
+                if (sustainabilityResult.rows.length > 0) {
+                    totalSustainabilityPoints += sustainabilityResult.rows[0].score * 10;
+                }
             } else if (item.type === 'shop') {
-                // For shop items, decrement the stock
-                const updateShopQuery = `
-                    UPDATE product_variants SET stock_amt = stock_amt - 1 WHERE id = $1 AND stock_amt > 0;
-                `;
-                const result = await client.query(updateShopQuery, [item.id]); // item.id is the variant_id here
+                const updateShopQuery = `UPDATE product_variants SET stock_amt = stock_amt - 1 WHERE id = $1 AND stock_amt > 0;`;
+                const result = await client.query(updateShopQuery, [item.id]);
                 if (result.rowCount === 0) throw new Error(`Shop item "${item.name} (${item.size})" is out of stock.`);
-
-                // Delete from the shop cart
                 await client.query('DELETE FROM shop_cart_items WHERE user_id = $1 AND variant_id = $2', [userId, item.id]);
             }
         }
 
-        await client.query('COMMIT'); // COMMIT THE TRANSACTION
+        if (totalSustainabilityPoints > 0) {
+            await client.query(`INSERT INTO user_sustainability_points (user_id, points) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET points = user_sustainability_points.points + $2`, [userId, totalSustainabilityPoints]);
+            await client.query(`INSERT INTO sustainability_points_history (user_id, points_change, reason, order_id) VALUES ($1, $2, $3, $4)`, [userId, totalSustainabilityPoints, 'Points earned from sustainable purchase', newOrderId]);
+        }
+
+        await client.query('COMMIT');
         
-        simulateDelivery(newOrderId); // This function from your teammate's code can remain
-        res.status(201).json({ message: 'Order created successfully!', orderId: newOrderId });
+        // --- START: PDF Generation and Emailing Logic ---
+        
+        // 1. Get user's email for the receipt
+        const userResult = await client.query('SELECT email FROM users WHERE id = $1', [userId]);
+        const userEmail = userResult.rows[0]?.email;
+
+        // 2. Prepare details for PDF and generate it
+        const subtotal = items.reduce((total, item) => total + parseFloat(item.displayPrice), 0);
+        const receiptPath = await generateReceiptPdf(newOrderId, { items, subtotal, shippingFee, totalPrice });
+
+        // 3. Send email with PDF attachment (if email exists)
+        if (userEmail) {
+            const mailOptions = {
+                from: process.env.EMAIL_USER,
+                to: userEmail,
+                subject: `Your EcoThrift Order Receipt #${newOrderId}`,
+                text: 'Thank you for your purchase! Please find your receipt attached.',
+                attachments: [{
+                    filename: `receipt-${newOrderId}.pdf`,
+                    path: receiptPath,
+                    contentType: 'application/pdf'
+                }]
+            };
+            // Send email but don't wait for it. Let it run in the background.
+            // Log errors but don't let it crash the main request.
+            transporter.sendMail(mailOptions).catch(err => {
+                console.error(`Failed to send receipt email for order ${newOrderId}:`, err);
+            });
+        } else {
+            console.warn(`Could not find email for user ID ${userId} to send receipt.`);
+        }
+
+        // --- END: PDF and Emailing Logic ---
+
+        // 4. Send the SINGLE, correct response to the frontend
+        const receiptUrl = `${req.protocol}://${req.get('host')}/invoices/receipt-${newOrderId}.pdf`;
+        res.status(201).json({ 
+            message: 'Order created successfully!', 
+            orderId: newOrderId,
+            sustainabilityPointsEarned: totalSustainabilityPoints,
+            receiptUrl: receiptUrl // Include the URL for the success page
+        });
+
+        // 5. Simulate delivery process in the background
+        simulateDelivery(newOrderId);
 
     } catch (err) {
-        await client.query('ROLLBACK'); // If anything fails, undo all changes
+        await client.query('ROLLBACK');
         console.error('Error creating unified order:', err.message);
-        // Send a more user-friendly error message
         res.status(500).json({ error: err.message || 'Server error while creating order.' });
     } finally {
         client.release();
     }
 });
 
+app.use('/invoices', express.static(path.join(__dirname, 'invoices')));
 
 /**
  * @route   GET /api/orders/:userId
@@ -1168,7 +1343,6 @@ app.get('/api/orders/:userId', async (req, res) => {
 app.get('/api/orders/details/:orderId', async (req, res) => {
     const { orderId } = req.params;
     try {
-        // Get order summary (this part is mostly the same)
         const orderQuery = `SELECT *, user_order_id FROM orders WHERE id = $1;`;
         const orderResult = await db.query(orderQuery, [orderId]);
         if (orderResult.rows.length === 0) {
@@ -1176,7 +1350,6 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
         }
         const orderSummary = orderResult.rows[0];
 
-        // Get line items for the order
         const itemsQuery = `SELECT * FROM order_items WHERE order_id = $1;`;
         const itemsResult = await db.query(itemsQuery, [orderId]);
         
@@ -1188,11 +1361,13 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
                     [item.purchased_item_id]
                 );
                 if (productRes.rows.length > 0) {
+                    // For marketplace items, the name is 'title'
                     lineItems.push({ ...item, ...productRes.rows[0], name: productRes.rows[0].title });
                 }
             } else if (item.item_type === 'shop') {
+                // THIS IS THE CRUCIAL FIX: We now fetch p.id as product_id
                 const productRes = await db.query(
-                    `SELECT p.product_name, p.image_urls, pv.size 
+                    `SELECT p.id as product_id, p.product_name, p.image_urls, pv.size 
                      FROM products p
                      JOIN product_variants pv ON p.id = pv.product_id
                      WHERE pv.id = $1`,
@@ -1200,11 +1375,12 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
                 );
                 if (productRes.rows.length > 0) {
                     const details = productRes.rows[0];
+                    // For shop items, the name is 'product_name'
                     lineItems.push({
                         ...item,
                         ...details,
                         name: details.product_name,
-                        image_url: details.image_urls // Ensure consistent naming
+                        image_url: details.image_urls
                     });
                 }
             }
@@ -1228,14 +1404,33 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
  */
 app.get('/api/listings/:userId', async (req, res) => {
     const { userId } = req.params;
+    // Get the optional 'status' from the query parameters (e.g., ?status=available)
+    const { status } = req.query;
+
     try {
-        const query = `
-            SELECT * FROM marketplaceproducts
-            WHERE seller_id = $1
-            ORDER BY created_at DESC;
-        `;
-        // We use parseInt here as a good practice to ensure the ID is a number.
-        const { rows } = await db.query(query, [parseInt(userId, 10)]);
+        let query;
+        const queryParams = [parseInt(userId, 10)];
+
+        // === THIS IS THE FIX ===
+        // We dynamically build the SQL query based on the presence of the 'status' parameter.
+        if (status && status !== 'all') {
+            // If a specific status is requested, add a WHERE clause for it.
+            query = `
+                SELECT * FROM marketplaceproducts
+                WHERE seller_id = $1 AND status = $2
+                ORDER BY created_at DESC;
+            `;
+            queryParams.push(status);
+        } else {
+            // If status is 'all' or not provided, fetch all listings for the user.
+            query = `
+                SELECT * FROM marketplaceproducts
+                WHERE seller_id = $1
+                ORDER BY created_at DESC;
+            `;
+        }
+
+        const { rows } = await db.query(query, queryParams);
         res.status(200).json(rows);
     } catch (err) {
         console.error('Error fetching user listings:', err.message);
@@ -1316,7 +1511,295 @@ app.get('/api/reviews/seller/:sellerId', async (req, res) => {
     }
 });
 
+app.post('/api/unified-reviews', async (req, res) => {
+    const { orderId, userId, rating, comment, itemType, productId, sellerId } = req.body;
+
+    if (!orderId || !userId || !rating || !itemType || !productId) {
+        return res.status(400).json({ error: 'Missing required review information.' });
+    }
+
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+
+        if (itemType === 'shop') {
+            await client.query(
+                `INSERT INTO reviews (product_id, user_id, rating, comment) VALUES ($1, $2, $3, $4)`,
+                [productId, userId, rating, comment]
+            );
+        } else if (itemType === 'marketplace') {
+            if (!sellerId) {
+                return res.status(400).json({ error: 'Seller ID is required for marketplace reviews.' });
+            }
+            await client.query(
+                `INSERT INTO marketplace_reviews (order_id, buyer_id, seller_id, rating, comment) VALUES ($1, $2, $3, $4, $5)`,
+                [orderId, userId, sellerId, rating, comment]
+            );
+        } else {
+            throw new Error('Invalid item type for review.');
+        }
+
+        await client.query(
+            `UPDATE orders SET review_completed_at = NOW() WHERE id = $1 AND buyer_id = $2`,
+            [orderId, userId]
+        );
+
+        await client.query('COMMIT');
+
+        // --- NEW CODE: Broadcast a specific message after successful review ---
+        broadcast({
+            type: 'REVIEW_SUBMITTED',
+            orderId: parseInt(orderId, 10)
+        });
+        
+        res.status(201).json({ message: 'Review submitted successfully!' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        if (err.code === '23505') {
+            return res.status(409).json({ error: 'You have already submitted a review for this item.' });
+        }
+        console.error('Error submitting unified review:', err);
+        res.status(500).json({ error: 'Server error while submitting review.' });
+    } finally {
+        client.release();
+    }
+});
+
 // ===============================================
+
+// jun hong's codes (sustainability endpoints)
+
+// Sustainability endpoints
+app.post('/api/analyze-sustainability', async (req, res) => {
+    const { image_url, product_id } = req.body;
+    console.log("🚀 Analyzing product", product_id, "with image:", image_url);
+    
+    if (!image_url || !product_id) {
+        return res.status(400).json({ error: "Image URL and product ID are required" });
+    }
+
+    try {
+        // Call Google Gemini API to analyze sustainability
+        const sustainabilityData = await analyzeSustainability(image_url);
+        
+        // Save to database
+        await db.query(
+            `INSERT INTO product_sustainability (product_id, score, analysis_text)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (product_id) DO UPDATE SET score = $2, analysis_text = $3`,
+            [product_id, sustainabilityData.score, sustainabilityData.analysis]
+        );
+
+        res.json({ score: sustainabilityData.score, analysis: sustainabilityData.analysis });
+    } catch (err) {
+        console.error("Sustainability analysis error:", err);
+        res.status(500).json({ error: "Failed to analyze sustainability" });
+    }
+});
+
+app.get('/api/user-points/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const result = await db.query(
+            'SELECT points FROM user_sustainability_points WHERE user_id = $1',
+            [userId]
+        );
+        if (result.rows.length === 0) {
+            // Initialize with 0 points if user doesn't have a record
+            await db.query(
+                'INSERT INTO user_sustainability_points (user_id, points) VALUES ($1, 0)',
+                [userId]
+            );
+            return res.json({ points: 0 });
+        }
+        res.json({ points: result.rows[0].points });
+    } catch (err) {
+        console.error("Error fetching user points:", err);
+        res.status(500).json({ error: "Failed to fetch points" });
+    }
+});
+
+app.get('/api/vouchers', async (req, res) => {
+    try {
+        const result = await db.query(
+            'SELECT * FROM vouchers WHERE is_active = TRUE ORDER BY points_cost'
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Error fetching vouchers:", err);
+        res.status(500).json({ error: "Failed to fetch vouchers" });
+    }
+});
+
+app.post('/api/redeem-voucher', async (req, res) => {
+    const { userId, voucherId } = req.body;
+    
+    if (!userId || !voucherId) {
+        return res.status(400).json({ error: "User ID and voucher ID are required" });
+    }
+
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // Get voucher details
+        const voucherResult = await client.query(
+            'SELECT * FROM vouchers WHERE id = $1 AND is_active = TRUE',
+            [voucherId]
+        );
+        if (voucherResult.rows.length === 0) {
+            return res.status(404).json({ error: "Voucher not found or inactive" });
+        }
+        const voucher = voucherResult.rows[0];
+        
+        // Check user has enough points
+        const userPointsResult = await client.query(
+            'SELECT points FROM user_sustainability_points WHERE user_id = $1 FOR UPDATE',
+            [userId]
+        );
+        if (userPointsResult.rows.length === 0 || userPointsResult.rows[0].points < voucher.points_cost) {
+            return res.status(400).json({ error: "Not enough sustainability points" });
+        }
+        
+        // Deduct points
+        await client.query(
+            'UPDATE user_sustainability_points SET points = points - $1 WHERE user_id = $2',
+            [voucher.points_cost, userId]
+        );
+        
+        // Add voucher to user
+        await client.query(
+            'INSERT INTO user_vouchers (user_id, voucher_id) VALUES ($1, $2)',
+            [userId, voucherId]
+        );
+        
+        // Record points transaction
+        await client.query(
+            'INSERT INTO sustainability_points_history (user_id, points_change, reason) VALUES ($1, $2, $3)',
+            [userId, -voucher.points_cost, `Redeemed voucher: ${voucher.code}`]
+        );
+        
+        await client.query('COMMIT');
+        res.json({ success: true, voucher: voucher.code });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Voucher redemption error:", err);
+        res.status(500).json({ error: "Failed to redeem voucher" });
+    } finally {
+        client.release();
+    }
+});
+
+app.get('/api/user-vouchers/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const result = await db.query(
+            `SELECT uv.*, v.code, v.discount_percent, v.points_cost 
+             FROM user_vouchers uv
+             JOIN vouchers v ON uv.voucher_id = v.id
+             WHERE uv.user_id = $1`,
+            [userId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Error fetching user vouchers:", err);
+        res.status(500).json({ error: "Failed to fetch vouchers" });
+    }
+});
+
+app.patch('/api/user-vouchers/:voucherId', async (req, res) => {
+    const { voucherId } = req.params;
+    const { is_active } = req.body;
+    const userId = req.query.userId;
+    
+    if (is_active === undefined || !userId) {
+        return res.status(400).json({ error: "Missing parameters" });
+    }
+
+    try {
+        const result = await db.query(
+            'UPDATE user_vouchers SET is_active = $1 WHERE id = $2 AND user_id = $3 RETURNING *',
+            [is_active, voucherId, userId]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Voucher not found" });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("Error updating voucher:", err);
+        res.status(500).json({ error: "Failed to update voucher" });
+    }
+});
+
+
+app.get('/api/product-sustainability/:productId', async (req, res) => {
+    const { productId } = req.params;
+
+    try {
+        const result = await db.query(
+            'SELECT score, analysis_text FROM product_sustainability WHERE product_id = $1',
+            [productId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Sustainability score not found" });
+        }
+
+        res.json({
+            score: result.rows[0].score,
+            analysis: result.rows[0].analysis_text
+        });
+    } catch (err) {
+        console.error("Error fetching sustainability score:", err);
+        res.status(500).json({ error: "Failed to fetch sustainability score" });
+    }
+});
+
+app.post('/api/analyze-all-products-sustainability', async (req, res) => {
+    try {
+        // Get all products without sustainability scores
+        const productsResult = await db.query(`
+            SELECT mp.* FROM marketplaceproducts mp
+            LEFT JOIN product_sustainability ps ON mp.id = ps.product_id
+            WHERE ps.product_id IS NULL AND mp.status != 'sold'
+        `);
+
+        const products = productsResult.rows;
+        let analyzed = 0;
+
+        for (const product of products) {
+            try {
+                const sustainabilityData = await analyzeSustainabilityByText(
+                    product.title, 
+                    product.description
+                );
+
+                if (sustainabilityData && sustainabilityData.score) {
+                    await db.query(
+                        `INSERT INTO product_sustainability (product_id, score, analysis_text)
+                         VALUES ($1, $2, $3)`,
+                        [product.id, sustainabilityData.score, sustainabilityData.analysis]
+                    );
+                    analyzed++;
+                }
+            } catch (err) {
+                console.error(`Failed to analyze product ${product.id}:`, err);
+            }
+        }
+
+        res.json({ 
+            message: `Analyzed ${analyzed} out of ${products.length} products`,
+            totalAnalyzed: analyzed 
+        });
+    } catch (err) {
+        console.error("Error in bulk analysis:", err);
+        res.status(500).json({ error: "Failed to analyze products" });
+    }
+});
+
+
+// ===========================================
 
 // =================================================================
 //  ===> PRODUCT & VARIANT CRUD OPERATIONS (NEWEST SCHEMA) <===
@@ -1527,6 +2010,91 @@ app.delete('/api/products/:id', async (req, res) => {
     }
 });
 
+app.put('/api/products/:productId/discounts', async (req, res) => {
+    const { productId } = req.params;
+    const { variants } = req.body; // Expects an array of { variant_id, discount_price }
+
+    if (!variants || !Array.isArray(variants)) {
+        return res.status(400).json({ error: 'A valid variants array is required.' });
+    }
+
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+
+        // --- Step 1: Get PRE-UPDATE state for notification logic ---
+        const oldVariantsState = await client.query(
+            'SELECT id, price, discount_price FROM product_variants WHERE product_id = $1', 
+            [productId]
+        );
+        
+        // Check if a discount is being newly applied (was null, now has a price)
+        const wasPreviouslyOnSale = oldVariantsState.rows.some(v => v.discount_price !== null);
+        const isNowOnSale = variants.some(v => v.discount_price !== null && v.discount_price !== '');
+        const shouldSendNotification = !wasPreviouslyOnSale && isNowOnSale;
+
+        // --- Step 2: Update all variants in the database ---
+        for (const variant of variants) {
+            let finalDiscountPrice = null;
+            if (variant.discount_price !== null && variant.discount_price !== undefined && variant.discount_price !== '') {
+                finalDiscountPrice = parseFloat(variant.discount_price);
+            }
+            await client.query(
+                'UPDATE product_variants SET discount_price = $1 WHERE id = $2 AND product_id = $3',
+                [finalDiscountPrice, variant.variant_id, productId]
+            );
+        }
+
+        await client.query('COMMIT');
+        
+        // --- Step 3: Send response to staff immediately ---
+        res.status(200).json({ message: 'Discounts updated successfully.' });
+
+        // --- Step 4: Asynchronous Email Notification Logic (if needed) ---
+        if (shouldSendNotification) {
+            console.log(`New discount applied to product ${productId}. Notifying users...`);
+
+            // Get product name and user emails in parallel
+            const [productInfo, usersToNotify] = await Promise.all([
+                db.query('SELECT product_name FROM products WHERE id = $1', [productId]),
+                db.query('SELECT u.email FROM users u JOIN wishlist_items w ON u.id = w.user_id WHERE w.product_id = $1', [productId])
+            ]);
+
+            if (usersToNotify.rows.length > 0 && productInfo.rows.length > 0) {
+                const productName = productInfo.rows[0].product_name;
+
+                // Find the lowest original price and lowest new discount price to show in the email
+                const originalPrice = Math.min(...oldVariantsState.rows.map(v => parseFloat(v.price)));
+                const newDiscountPrice = Math.min(...variants.filter(v => v.discount_price).map(v => parseFloat(v.discount_price)));
+
+                console.log(`Found ${usersToNotify.rows.length} users. Notifying about "${productName}"...`);
+                
+                for (const user of usersToNotify.rows) {
+                    const mailOptions = {
+                        from: process.env.EMAIL_USER,
+                        to: user.email,
+                        subject: `Price Drop Alert! An item on your wishlist is on sale!`,
+                        html: `
+                            <p>Great news! An item on your EcoThrift wishlist, <strong>${productName}</strong>, is now on sale.</p>
+                            <p>It's now available from just <strong>$${newDiscountPrice.toFixed(2)}</strong> (was $${originalPrice.toFixed(2)}).</p>
+                            <p>Check it out before it's gone!</p>
+                        `
+                    };
+                    transporter.sendMail(mailOptions).catch(err => {
+                        console.error(`Failed to send email to ${user.email}:`, err);
+                    });
+                }
+            }
+        }
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`Error updating discounts for product ${productId}:`, err);
+        res.status(500).json({ error: 'Server error', details: err.message });
+    } finally {
+        client.release();
+    }
+});
 
 // =================================================================
 //  ===> REVIEW CRUD OPERATIONS (Updated for New Schema) <===
@@ -1679,27 +2247,50 @@ app.put('/api/variants/:variantId/stock', async (req, res) => {
 // =================================================================
 
 app.get('/api/shop/products', async (req, res) => {
-    const { category, search, page = 1, limit = 9 } = req.query;
+    const { category, search, page = 1, limit = 9, minPrice, maxPrice, onSale, sortBy } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
+
     let queryParams = [];
-    let whereClauses = ["EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active')"];
+    let whereClauses = ["p.id IN (SELECT product_id FROM product_variants WHERE status = 'active')"];
+
     if (category) {
-        queryParams.push(`%${category}%`);
+        queryParams.push(category);
         whereClauses.push(`p.categories ILIKE $${queryParams.length}`);
     }
     if (search) {
         queryParams.push(`%${search}%`);
         whereClauses.push(`(p.product_name ILIKE $${queryParams.length} OR p.product_description ILIKE $${queryParams.length})`);
     }
+    if (minPrice && maxPrice) {
+        queryParams.push(minPrice, maxPrice);
+        whereClauses.push(`EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id AND pv.price BETWEEN $${queryParams.length - 1} AND $${queryParams.length})`);
+    }
+    if (onSale === 'true') {
+        whereClauses.push(`EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id AND pv.discount_price IS NOT NULL)`);
+    }
+
     const whereString = `WHERE ${whereClauses.join(' AND ')}`;
+    
+    let orderByString = 'ORDER BY p.created_at DESC';
+    if (sortBy === 'newest') {
+        orderByString = 'ORDER BY p.created_at DESC';
+    }
+
     const dataQuery = `
-        SELECT p.*, (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price
-        FROM products p ${whereString}
-        ORDER BY p.created_at DESC
+        SELECT 
+            p.*,
+            (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price,
+            (SELECT MIN(pv.discount_price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as discount_price,
+            -- NEW: Calculate average rating for each product
+            COALESCE((SELECT AVG(rating) FROM reviews WHERE product_id = p.id), 0) as average_rating
+        FROM products p
+        ${whereString}
+        ${orderByString}
         LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
     `;
     const dataParams = [...queryParams, parseInt(limit), offset];
     const countQuery = `SELECT COUNT(p.id) FROM products p ${whereString}`;
+
     try {
         const productsResult = await db.query(dataQuery, dataParams);
         const countResult = await db.query(countQuery, queryParams);
@@ -1744,9 +2335,16 @@ app.get('/api/wishlist/ids/:userId', async (req, res) => {
 app.get('/api/wishlist/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
+        // THIS QUERY IS NOW UPGRADED to include average_rating
         const query = `
-            SELECT p.*, (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price
-            FROM products p JOIN wishlist_items w ON p.id = w.product_id
+            SELECT 
+                p.*,
+                w.note, -- Include the user's note for the item
+                (SELECT MIN(pv.price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as price,
+                (SELECT MIN(pv.discount_price) FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'active') as discount_price,
+                COALESCE((SELECT AVG(rating) FROM reviews WHERE product_id = p.id), 0) as average_rating
+            FROM products p
+            JOIN wishlist_items w ON p.id = w.product_id
             WHERE w.user_id = $1;
         `;
         const { rows } = await db.query(query, [userId]);
@@ -1815,6 +2413,7 @@ app.get('/api/shop/cart/:userId', async (req, res) => {
                 pv.id AS variant_id,
                 pv.size,
                 pv.price,
+                pv.discount_price, -- <-- THIS IS THE NEWLY ADDED FIELD
                 p.id AS product_id,
                 p.product_name,
                 p.image_urls
@@ -1861,6 +2460,152 @@ app.delete('/api/shop/cart/:userId/:variantId', async (req, res) => {
     } catch (err) {
         console.error('Error removing from shop cart:', err.message);
         res.status(500).json({ error: 'Server error while removing from shop cart.' });
+    }
+});
+
+app.post('/api/create-payment-intent', async (req, res) => {
+    // NEW: Accept voucherId and userId from the request
+    const { items, deliveryMethod, voucherId, userId } = req.body;
+    const SHIPPING_FEE = 5.00;
+
+    try {
+        // --- SECURE SERVER-SIDE CALCULATION ---
+        let subtotal = items.reduce((total, item) => total + parseFloat(item.displayPrice), 0);
+        let discountAmount = 0;
+
+        // --- SECURE VOUCHER VALIDATION ---
+        if (voucherId && userId) {
+            // 1. Check if the user actually owns this active voucher
+            const voucherRes = await db.query(
+                `SELECT v.* 
+                 FROM user_vouchers uv
+                 JOIN vouchers v ON uv.voucher_id = v.id
+                 WHERE uv.id = $1 AND uv.user_id = $2 AND uv.is_active = TRUE`,
+                [voucherId, userId]
+            );
+            
+            if (voucherRes.rows.length > 0) {
+                const voucher = voucherRes.rows[0];
+                // 2. Calculate the discount securely on the server
+                discountAmount = (subtotal * voucher.discount_percent / 100);
+            } else {
+                console.warn(`User ${userId} attempted to use invalid or inactive voucher ${voucherId}.`);
+            }
+        }
+        
+        const shippingFee = deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0;
+        // 3. Calculate the final total on the server
+        const finalTotal = subtotal - discountAmount + shippingFee;
+
+        // 4. Ensure the final amount is not negative and is at least 50 cents (Stripe's minimum)
+        const totalAmountInCents = Math.max(50, Math.round(finalTotal * 100));
+
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: totalAmountInCents,
+            currency: 'usd', // or your currency
+        });
+
+        res.send({ clientSecret: paymentIntent.client_secret });
+
+    } catch (e) {
+        console.error("Error creating payment intent:", e.message);
+        res.status(500).send({ error: { message: "Failed to create payment intent." } });
+    }
+});
+
+app.post('/api/paypal/create-order', async (req, res) => {
+    // ENHANCEMENT: Accept voucherId and userId to correctly calculate the total
+    const { items, deliveryMethod, voucherId, userId } = req.body;
+    const SHIPPING_FEE = 5.00;
+
+    try {
+        // --- SECURE SERVER-SIDE CALCULATION (Same as Stripe) ---
+        let subtotal = items.reduce((total, item) => total + parseFloat(item.displayPrice), 0);
+        let discountAmount = 0;
+
+        // --- SECURE VOUCHER VALIDATION (Same as Stripe) ---
+        if (voucherId && userId) {
+            const voucherRes = await db.query(
+                `SELECT v.* 
+                 FROM user_vouchers uv
+                 JOIN vouchers v ON uv.voucher_id = v.id
+                 WHERE uv.id = $1 AND uv.user_id = $2 AND uv.is_active = TRUE`,
+                [voucherId, userId]
+            );
+            
+            if (voucherRes.rows.length > 0) {
+                const voucher = voucherRes.rows[0];
+                discountAmount = (subtotal * voucher.discount_percent / 100);
+            }
+        }
+        
+        const shippingFee = deliveryMethod === 'Doorstep' ? SHIPPING_FEE : 0;
+        const finalTotal = subtotal - discountAmount + shippingFee;
+
+        // Ensure total is not negative
+        const totalAmount = Math.max(0, finalTotal).toFixed(2);
+
+        const request = new paypal.orders.OrdersCreateRequest();
+        request.prefer("return=representation");
+        request.requestBody({
+            intent: 'CAPTURE',
+            purchase_units: [{
+                amount: {
+                    currency_code: 'USD',
+                    value: totalAmount,
+                },
+            }],
+        });
+
+        const order = await paypalClient.execute(request);
+        res.status(200).json({ orderID: order.result.id });
+
+    } catch (err) {
+        // More detailed logging for PayPal errors
+        console.error("Error creating PayPal order:", err.statusCode ? err.statusCode : err.message, err.result ? err.result : '');
+        res.status(500).send(err.message || 'Failed to create PayPal order');
+    }
+});
+
+
+app.post('/api/paypal/capture-order', async (req, res) => {
+    const { orderID } = req.body;
+    const request = new paypal.orders.OrdersCaptureRequest(orderID);
+    request.requestBody({});
+
+    try {
+        const capture = await paypalClient.execute(request);
+        res.status(200).json({ capture });
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
+app.put('/api/users/:id/address', async (req, res) => {
+    const { id } = req.params;
+    const { address, postalCode, country } = req.body;
+
+    if (!address || !postalCode || !country) {
+        return res.status(400).json({ error: 'Address, postal code, and country are required.' });
+    }
+
+    try {
+        const result = await db.query(
+            `UPDATE users 
+             SET address = $1, postal_code = $2, country = $3 
+             WHERE id = $4 
+             RETURNING id, address, postal_code, country`,
+            [address, postalCode, country, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+
+        res.status(200).json({ message: 'Address updated successfully.', user: result.rows[0] });
+    } catch (err) {
+        console.error('Error updating user address:', err);
+        res.status(500).json({ error: 'Server error while updating address.' });
     }
 });
 

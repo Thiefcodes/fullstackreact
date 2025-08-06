@@ -1,32 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
+import '../Styles/OrderDetailsPage.css';
 
-const ReviewForm = ({ order, onReviewSubmitted }) => {
+// ReviewModal is now simpler: it doesn't trigger a refetch directly.
+const ReviewModal = ({ item, orderId, onClose }) => {
     const [rating, setRating] = useState(5);
+    const [hoverRating, setHoverRating] = useState(0);
     const [comment, setComment] = useState('');
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const userId = localStorage.getItem('userId');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
         setError('');
-        try {
-            // This will now work because we will fetch the seller_id from the backend.
-            const sellerId = order.items[0]?.seller_id;
-            if (!sellerId) {
-                throw new Error("Could not determine seller ID.");
-            }
 
-            await axios.post('http://localhost:5000/api/reviews', {
-                orderId: order.summary.id,
-                buyerId: order.summary.buyer_id,
-                sellerId: sellerId,
-                rating: rating,
-                comment: comment
-            });
-            onReviewSubmitted();
+        const payload = {
+            orderId,
+            userId,
+            rating,
+            comment,
+            itemType: item.item_type,
+            productId: item.product_id || item.purchased_item_id, 
+            sellerId: item.seller_id 
+        };
+
+        try {
+            const response = await axios.post('http://localhost:5000/api/unified-reviews', payload);
+            alert('Review submitted successfully!');
+            // The WebSocket will now handle the state update.
+            onClose();
         } catch (err) {
             console.error("Error submitting review:", err);
             setError(err.response?.data?.error || "Failed to submit review.");
@@ -34,28 +39,33 @@ const ReviewForm = ({ order, onReviewSubmitted }) => {
             setIsSubmitting(false);
         }
     };
-    
+
     return (
-        <div style={{ marginTop: '30px', padding: '20px', border: '1px solid #ddd', borderRadius: '8px' }}>
-            <h3>Leave a Review</h3>
-            <form onSubmit={handleSubmit}>
-                <div>
-                    <label>Rating:</label>
+        <div className="review-modal-overlay" onClick={onClose}>
+            <div className="review-modal-content" onClick={(e) => e.stopPropagation()}>
+                <h2>Leave a Review for {item.name}</h2>
+                <form onSubmit={handleSubmit}>
                     <div>
-                        {[1, 2, 3, 4, 5].map(star => (
-                            <span key={star} onClick={() => setRating(star)} style={{ cursor: 'pointer', color: star <= rating ? 'gold' : 'grey', fontSize: '2em' }}>★</span>
-                        ))}
+                        <label>Rating:</label>
+                        <div className="star-rating-input">
+                            {[1, 2, 3, 4, 5].map(star => (
+                                <span key={star} onClick={() => setRating(star)} onMouseEnter={() => setHoverRating(star)} onMouseLeave={() => setHoverRating(0)} className={`star ${(hoverRating || rating) >= star ? 'filled' : ''}`}>★</span>
+                            ))}
+                        </div>
                     </div>
-                </div>
-                <div style={{ marginTop: '15px' }}>
-                    <label>Comment:</label>
-                    <textarea value={comment} onChange={(e) => setComment(e.target.value)} style={{ width: '100%', minHeight: '100px', marginTop: '5px' }} />
-                </div>
-                <button type="submit" disabled={isSubmitting} style={{ marginTop: '15px' }}>
-                    {isSubmitting ? 'Submitting...' : 'Submit Review'}
-                </button>
-                {error && <p style={{ color: 'red' }}>{error}</p>}
-            </form>
+                    <div style={{ marginTop: '15px' }}>
+                        <label>Comment:</label>
+                        <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Share your thoughts about the product..." />
+                    </div>
+                    <div className="review-modal-actions">
+                        <button type="button" className="cancel-btn" onClick={onClose}>Cancel</button>
+                        <button type="submit" className="submit-btn" disabled={isSubmitting}>
+                            {isSubmitting ? 'Submitting...' : 'Submit Review'}
+                        </button>
+                    </div>
+                    {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
+                </form>
+            </div>
         </div>
     );
 };
@@ -64,6 +74,8 @@ const OrderDelivery = () => {
     const { orderId } = useParams();
     const [order, setOrder] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [reviewingItem, setReviewingItem] = useState(null);
 
     const fetchOrderDetails = async () => {
         try {
@@ -71,14 +83,18 @@ const OrderDelivery = () => {
             setOrder(response.data);
         } catch (err) {
             console.error("Error fetching order details:", err);
-        } finally {
-            setLoading(false);
+            setError(err.message);
         }
     };
 
     useEffect(() => {
-        fetchOrderDetails();
-        // ... WebSocket logic ...
+        const initialFetch = async () => {
+            setLoading(true);
+            await fetchOrderDetails();
+            setLoading(false);
+        };
+        initialFetch();
+
         const ws = new WebSocket('ws://localhost:5000');
         ws.onopen = () => {
             console.log('WebSocket connection established.');
@@ -86,8 +102,16 @@ const OrderDelivery = () => {
         };
         ws.onmessage = (event) => {
             const message = JSON.parse(event.data);
-            if (message.type === 'ORDER_STATUS_UPDATE') {
+            
+            // Handle delivery status updates from the simulation
+            if (message.type === 'ORDER_STATUS_UPDATE' && message.order) {
                 setOrder(prevOrder => ({ ...prevOrder, summary: message.order }));
+            }
+
+            // --- NEW LOGIC: Handle review submission update ---
+            if (message.type === 'REVIEW_SUBMITTED' && message.orderId === parseInt(orderId, 10)) {
+                console.log('Review submission confirmed via WebSocket, refetching details...');
+                fetchOrderDetails();
             }
         };
         ws.onclose = () => console.log('WebSocket connection closed.');
@@ -109,41 +133,70 @@ const OrderDelivery = () => {
     );
 
     if (loading) return <p>Loading order details...</p>;
+    if (error) return <p>Error: {error}</p>;
     if (!order) return <p>Order not found.</p>;
 
     const isDelivered = !!order.summary.delivered_at;
     const isReviewCompleted = !!order.summary.review_completed_at;
 
     return (
-        <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
-            <h1>Order #{order.summary.user_order_id}</h1>
+        <div className="order-details-container">
+            {reviewingItem && (
+                <ReviewModal 
+                    item={reviewingItem} 
+                    orderId={orderId}
+                    onClose={() => setReviewingItem(null)}
+                    onReviewSubmitted={() => {
+                        // The modal no longer needs to do anything here,
+                        // but we keep the prop for clarity.
+                    }}
+                />
+            )}
+            <div className="order-summary-box">
+                <h1>Order #{order.summary.user_order_id}</h1>
+                <div className="summary-grid">
+                    <p><strong>Order Date:</strong> {new Date(order.summary.ordered_at).toLocaleDateString()}</p>
+                    <p><strong>Total Price:</strong> ${parseFloat(order.summary.total_price).toFixed(2)}</p>
+                    <p><strong>Delivery Method:</strong> {order.summary.delivery_method}</p>
+                    <p><strong>Status:</strong> {order.summary.delivered_at ? 'Delivered' : 'In Progress'}</p>
+                </div>
+            </div>
             <div style={{ display: 'flex', gap: '40px' }}>
                 <div style={{ flex: 1 }}>
                     <h3>Delivery Status</h3>
                     <TimelineStep title="Order Placed" timestamp={order.summary.ordered_at} isCompleted={!!order.summary.ordered_at} />
                     <TimelineStep title="Shipped" timestamp={order.summary.shipped_at} isCompleted={!!order.summary.shipped_at} />
-                    {/* Logic Fix: Only the very last step should have isLast={true} */}
-                    <TimelineStep title="Delivered" timestamp={order.summary.delivered_at} isCompleted={isDelivered} />
-                    <TimelineStep title="In Review" timestamp={order.summary.review_started_at} isCompleted={isDelivered} />
-                    <TimelineStep title="Review Completed" timestamp={order.summary.review_completed_at} isCompleted={isReviewCompleted} isLast={true} />
+                    <TimelineStep title="Delivered" timestamp={order.summary.delivered_at} isCompleted={isDelivered} isLast={true} />
                 </div>
                 <div style={{ flex: 2 }}>
                     <h3>Items in this Order</h3>
-                    {order.items.map((item, index) => (
-                         <div key={index} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #eee', padding: '10px 0' }}>
-                            <img src={(item.image_url && item.image_url[0]) || `https://placehold.co/80x80`} alt={item.title} style={{ width: '80px', height: '80px', objectFit: 'cover', marginRight: '15px' }} />
-                            <div style={{ flexGrow: 1 }}>
-                                <p style={{ margin: 0, fontWeight: 'bold' }}>{item.title}</p>
-                                <p style={{ margin: '4px 0', color: '#555' }}>Size: {item.size}</p>
+                    {order.items.map((item) => {
+                        let imageUrl = 'https://placehold.co/80x80';
+                        if (Array.isArray(item.image_url) && item.image_url.length > 0) {
+                            imageUrl = item.image_url[0];
+                        } else if (typeof item.image_url === 'string') {
+                            imageUrl = item.image_url.split(',')[0];
+                        }
+                        return (
+                            <div key={item.id} className="order-item-card">
+                                <img src={imageUrl} alt={item.name} className="order-item-image" />
+                                <div className="order-item-info">
+                                    <h3>{item.name}</h3>
+                                    <p>Type: {item.item_type}</p>
+                                    <p>Price: ${parseFloat(item.price_at_purchase).toFixed(2)}</p>
+                                </div>
+                                <div className="order-item-actions">
+                                    {isDelivered && !isReviewCompleted && (
+                                        <button className="leave-review-btn" onClick={() => setReviewingItem(item)}>
+                                            Leave a Review
+                                        </button>
+                                    )}
+                                </div>
                             </div>
-                            <p style={{ margin: 0 }}>${parseFloat(item.price_at_purchase).toFixed(2)}</p>
-                        </div>
-                    ))}
-                    {isDelivered && !isReviewCompleted && (
-                        <ReviewForm order={order} onReviewSubmitted={fetchOrderDetails} />
-                    )}
-                    {isReviewCompleted && (
-                        <p style={{ marginTop: '20px', color: 'green' }}>Thank you for your review!</p>
+                        );
+                    })}
+                     {isReviewCompleted && (
+                        <p style={{ marginTop: '20px', color: 'green', fontWeight: 'bold' }}>Thank you for your review!</p>
                     )}
                 </div>
             </div>

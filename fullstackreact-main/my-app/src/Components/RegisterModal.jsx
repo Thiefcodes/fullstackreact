@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import allCountries from '../utils/countries';
-import closeIcon from '../assets/close-icon.png'; 
-
+import closeIcon from '../assets/close-icon.png';
 
 const initialForm = {
     username: '', password: '', confirmPassword: '',
@@ -79,7 +78,7 @@ export default function RegisterModal({ open, onClose, onSuccess, setLoginOpen }
                 phone: form.phone,
                 address: form.address,
                 country: form.country,
-                postal_code: form.postalCode,  // <-- Added postal code here
+                postal_code: form.postalCode,
                 type: 'User'
             };
             const res = await fetch('http://localhost:5000/api/register', {
@@ -113,10 +112,21 @@ export default function RegisterModal({ open, onClose, onSuccess, setLoginOpen }
             background: 'rgba(0,0,0,0.16)', zIndex: 2200, display: 'flex',
             alignItems: 'center', justifyContent: 'center'
         }}>
-            <div style={{
-                background: '#fff', borderRadius: 18, minWidth: 350, maxWidth: 420, width: '100%',
-                boxShadow: '0 6px 36px #16342d22', padding: '38px 36px 28px 36px', position: 'relative'
-            }}>
+            <div
+                style={{
+                    background: '#fff',
+                    borderRadius: 18,
+                    minWidth: 350,
+                    maxWidth: 420,
+                    width: '100%',
+                    boxShadow: '0 6px 36px #16342d22',
+                    padding: '38px 36px 28px 36px',
+                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    maxHeight: '92vh',
+                    overflow: 'hidden'
+                }}>
                 {/* Close Button */}
                 <button
                     onClick={onClose}
@@ -152,189 +162,198 @@ export default function RegisterModal({ open, onClose, onSuccess, setLoginOpen }
                 }}>
                     {step === 1 ? 'Sign Up (Step 1)' : 'Sign Up (Step 2)'}
                 </h2>
-                <form onSubmit={step === 1 ? handleNext : handleRegister}>
-                    {step === 1 && (
-                        <>
-                        <div style={{ marginBottom: 18 }}>
-                            <label style={{ fontWeight: 600 }}>Username</label>
-                            <input
-                            name="username"
-                            value={form.username}
-                            onChange={handleChange}
-                            style={inputStyle}
-                            />
-                            {errors.username && (
-                            <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.username}</div>
-                            )}
-                        </div>
-                        <div style={{ marginBottom: 18 }}>
-                            <label style={{ fontWeight: 600 }}>Password</label>
-                            <input
-                            type="password"
-                            name="password"
-                            value={form.password}
-                            onChange={handleChange}
-                            style={inputStyle}
-                            />
-                            {errors.password && (
-                            <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.password}</div>
-                            )}
-                        </div>
-                        <div style={{ marginBottom: 18 }}>
-                            <label style={{ fontWeight: 600 }}>Confirm Password</label>
-                            <input
-                            type="password"
-                            name="confirmPassword"
-                            value={form.confirmPassword}
-                            onChange={handleChange}
-                            style={inputStyle}
-                            />
-                            {errors.confirmPassword && (
-                            <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.confirmPassword}</div>
-                            )}
-                        </div>
-                        <button type="submit" style={btnStyle} disabled={loading}>
-                            Next
-                        </button>
-                        {errors.server && (
-                            <div style={{ color: '#d32f2f', fontSize: 14, marginTop: 12, textAlign: 'center' }}>
-                            {errors.server}
-                            </div>
+                {/* SCROLLABLE CONTENT STARTS HERE */}
+                <div style={{
+                    overflowY: 'auto',
+                    flex: 1,
+                    minHeight: 0,
+                    maxHeight: '67vh',
+                    paddingRight: 4
+                }}>
+                    <form onSubmit={step === 1 ? handleNext : handleRegister}>
+                        {step === 1 && (
+                            <>
+                                <div style={{ marginBottom: 18 }}>
+                                    <label style={{ fontWeight: 600 }}>Username</label>
+                                    <input
+                                        name="username"
+                                        value={form.username}
+                                        onChange={handleChange}
+                                        style={inputStyle}
+                                    />
+                                    {errors.username && (
+                                        <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.username}</div>
+                                    )}
+                                </div>
+                                <div style={{ marginBottom: 18 }}>
+                                    <label style={{ fontWeight: 600 }}>Password</label>
+                                    <input
+                                        type="password"
+                                        name="password"
+                                        value={form.password}
+                                        onChange={handleChange}
+                                        style={inputStyle}
+                                    />
+                                    {errors.password && (
+                                        <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.password}</div>
+                                    )}
+                                </div>
+                                <div style={{ marginBottom: 18 }}>
+                                    <label style={{ fontWeight: 600 }}>Confirm Password</label>
+                                    <input
+                                        type="password"
+                                        name="confirmPassword"
+                                        value={form.confirmPassword}
+                                        onChange={handleChange}
+                                        style={inputStyle}
+                                    />
+                                    {errors.confirmPassword && (
+                                        <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.confirmPassword}</div>
+                                    )}
+                                </div>
+                                <button type="submit" style={btnStyle} disabled={loading}>
+                                    Next
+                                </button>
+                                {errors.server && (
+                                    <div style={{ color: '#d32f2f', fontSize: 14, marginTop: 12, textAlign: 'center' }}>
+                                        {errors.server}
+                                    </div>
+                                )}
+                            </>
                         )}
-                        </>
-                    )}
-                    {step === 2 && (
-                        <>
-                        <div style={{ marginBottom: 18 }}>
-                            <label style={{ fontWeight: 600 }}>Email</label>
-                            <input
-                            name="email"
-                            type="email"
-                            value={form.email}
-                            onChange={handleChange}
-                            style={inputStyle}
-                            />
-                            {errors.email && (
-                            <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.email}</div>
-                            )}
-                        </div>
-                        <div style={{ marginBottom: 18 }}>
-                            <label style={{ fontWeight: 600 }}>First Name</label>
-                            <input
-                            name="firstName"
-                            value={form.firstName}
-                            onChange={handleChange}
-                            style={inputStyle}
-                            />
-                            {errors.firstName && (
-                            <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.firstName}</div>
-                            )}
-                        </div>
-                        <div style={{ marginBottom: 18 }}>
-                            <label style={{ fontWeight: 600 }}>Last Name</label>
-                            <input
-                            name="lastName"
-                            value={form.lastName}
-                            onChange={handleChange}
-                            style={inputStyle}
-                            />
-                            {errors.lastName && (
-                            <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.lastName}</div>
-                            )}
-                        </div>
-                        <div style={{ marginBottom: 18 }}>
-                            <label style={{ fontWeight: 600 }}>Phone Number</label>
-                            <input
-                            name="phone"
-                            value={form.phone}
-                            onChange={e => {
-                                const v = e.target.value.replace(/[^0-9+\-\s]/g, '');
-                                setForm(f => ({ ...f, phone: v }));
-                            }}
-                            style={inputStyle}
-                            />
-                            {errors.phone && (
-                            <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.phone}</div>
-                            )}
-                        </div>
-                        <div style={{ marginBottom: 18 }}>
-                            <label style={{ fontWeight: 600 }}>Address</label>
-                            <input
-                            name="address"
-                            value={form.address}
-                            onChange={handleChange}
-                            style={inputStyle}
-                            />
-                            {errors.address && (
-                            <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.address}</div>
-                            )}
-                        </div>
-                        <div style={{ marginBottom: 18 }}>
-                            <label style={{ fontWeight: 600 }}>Postal Code</label>
-                            <input
-                            name="postalCode"
-                            value={form.postalCode}
-                            maxLength={6}
-                            onChange={handleChange}
-                            style={inputStyle}
-                            />
-                            {errors.postalCode && (
-                            <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.postalCode}</div>
-                            )}
-                        </div>
-                        <div style={{ marginBottom: 18 }}>
-                            <label style={{ fontWeight: 600 }}>Country</label>
-                            <select
-                            name="country"
-                            value={form.country}
-                            onChange={handleChange}
-                            style={{ ...inputStyle, minHeight: 44 }}
-                            >
-                            <option value="">Select your country</option>
-                            {allCountries.map((country) => (
-                                <option value={country} key={country}>{country}</option>
-                            ))}
-                            </select>
-                            {errors.country && (
-                            <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.country}</div>
-                            )}
-                        </div>
-                        <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-                            <button type="button" style={{ ...btnStyle, background: '#ddd', color: '#15342D' }} onClick={handleBack}>
-                            Back
-                            </button>
-                            <button type="submit" style={btnStyle} disabled={loading}>
-                            {loading ? 'Registering...' : 'Register'}
-                            </button>
-                        </div>
-                        {errors.server && (
-                            <div style={{ color: '#d32f2f', fontSize: 14, marginTop: 12, textAlign: 'center' }}>
-                            {errors.server}
-                            </div>
+                        {step === 2 && (
+                            <>
+                                <div style={{ marginBottom: 18 }}>
+                                    <label style={{ fontWeight: 600 }}>Email</label>
+                                    <input
+                                        name="email"
+                                        type="email"
+                                        value={form.email}
+                                        onChange={handleChange}
+                                        style={inputStyle}
+                                    />
+                                    {errors.email && (
+                                        <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.email}</div>
+                                    )}
+                                </div>
+                                <div style={{ marginBottom: 18 }}>
+                                    <label style={{ fontWeight: 600 }}>First Name</label>
+                                    <input
+                                        name="firstName"
+                                        value={form.firstName}
+                                        onChange={handleChange}
+                                        style={inputStyle}
+                                    />
+                                    {errors.firstName && (
+                                        <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.firstName}</div>
+                                    )}
+                                </div>
+                                <div style={{ marginBottom: 18 }}>
+                                    <label style={{ fontWeight: 600 }}>Last Name</label>
+                                    <input
+                                        name="lastName"
+                                        value={form.lastName}
+                                        onChange={handleChange}
+                                        style={inputStyle}
+                                    />
+                                    {errors.lastName && (
+                                        <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.lastName}</div>
+                                    )}
+                                </div>
+                                <div style={{ marginBottom: 18 }}>
+                                    <label style={{ fontWeight: 600 }}>Phone Number</label>
+                                    <input
+                                        name="phone"
+                                        value={form.phone}
+                                        onChange={e => {
+                                            const v = e.target.value.replace(/[^0-9+\-\s]/g, '');
+                                            setForm(f => ({ ...f, phone: v }));
+                                        }}
+                                        style={inputStyle}
+                                    />
+                                    {errors.phone && (
+                                        <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.phone}</div>
+                                    )}
+                                </div>
+                                <div style={{ marginBottom: 18 }}>
+                                    <label style={{ fontWeight: 600 }}>Address</label>
+                                    <input
+                                        name="address"
+                                        value={form.address}
+                                        onChange={handleChange}
+                                        style={inputStyle}
+                                    />
+                                    {errors.address && (
+                                        <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.address}</div>
+                                    )}
+                                </div>
+                                <div style={{ marginBottom: 18 }}>
+                                    <label style={{ fontWeight: 600 }}>Postal Code</label>
+                                    <input
+                                        name="postalCode"
+                                        value={form.postalCode}
+                                        maxLength={6}
+                                        onChange={handleChange}
+                                        style={inputStyle}
+                                    />
+                                    {errors.postalCode && (
+                                        <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.postalCode}</div>
+                                    )}
+                                </div>
+                                <div style={{ marginBottom: 18 }}>
+                                    <label style={{ fontWeight: 600 }}>Country</label>
+                                    <select
+                                        name="country"
+                                        value={form.country}
+                                        onChange={handleChange}
+                                        style={{ ...inputStyle, minHeight: 44 }}
+                                    >
+                                        <option value="">Select your country</option>
+                                        {allCountries.map((country) => (
+                                            <option value={country} key={country}>{country}</option>
+                                        ))}
+                                    </select>
+                                    {errors.country && (
+                                        <div style={{ color: '#d32f2f', fontSize: 13, marginTop: 2 }}>{errors.country}</div>
+                                    )}
+                                </div>
+                                <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                                    <button type="button" style={{ ...btnStyle, background: '#ddd', color: '#15342D' }} onClick={handleBack}>
+                                        Back
+                                    </button>
+                                    <button type="submit" style={btnStyle} disabled={loading}>
+                                        {loading ? 'Registering...' : 'Register'}
+                                    </button>
+                                </div>
+                                {errors.server && (
+                                    <div style={{ color: '#d32f2f', fontSize: 14, marginTop: 12, textAlign: 'center' }}>
+                                        {errors.server}
+                                    </div>
+                                )}
+                            </>
                         )}
-                        </>
-                    )}
                     </form>
-
-                {step === 1 && (
-                    <div style={{ textAlign: 'center', marginTop: 22, color: '#256c52', fontSize: 15 }}>
-                        Already have an account?{' '}
-                        <span
-                            onClick={() => {
-                                onClose(); // Close register modal
-                                if (typeof setLoginOpen === 'function') setLoginOpen(true); // Open login modal
-                            }}
-                            style={{
-                                color: '#21706a',
-                                textDecoration: 'underline',
-                                fontWeight: 600,
-                                cursor: 'pointer'
-                            }}
-                        >
-                            Login
-                        </span>
-                    </div>
-                )}
+                    {step === 1 && (
+                        <div style={{ textAlign: 'center', marginTop: 22, color: '#256c52', fontSize: 15 }}>
+                            Already have an account?{' '}
+                            <span
+                                onClick={() => {
+                                    onClose();
+                                    if (typeof setLoginOpen === 'function') setLoginOpen(true);
+                                }}
+                                style={{
+                                    color: '#21706a',
+                                    textDecoration: 'underline',
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Login
+                            </span>
+                        </div>
+                    )}
+                </div>
+                {/* END SCROLLABLE CONTENT */}
             </div>
         </div>
     );
