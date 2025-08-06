@@ -1,3 +1,4 @@
+
 .details-page-container {
     max-width: 1200px;
     margin: 0 auto;
@@ -62,29 +63,28 @@
     display: flex;
     flex-direction: column;
 }
-.product-title { font-size: 2.5rem; font-weight: 700; margin: 5 0 0.5rem 0; }
+.product-title { font-size: 2.5rem; font-weight: 700; margin: 0 0 0.5rem 0; }
 .reviews-summary {
     display: flex; align-items: center; gap: 0.5rem;
     margin-bottom: 0.5rem; 
     color: #4b5563;
 }
-.star-rating-details { color: #10B981; font-size: 1.2rem; }
 .product-tags { 
     font-size: 1.1rem; color: #374151; 
     margin-top: 0;
     margin-bottom: 1rem; 
 }
 
-.product-price-container {
+.product-price-container6 {
     min-height: 44px;
 }
-.product-price-details {
+.product-price-details6 {
     font-size: 1.75rem;
     font-weight: 600;
     color: #111827;
     margin: 0;
 }
-.price-placeholder {
+.price-placeholder6 {
     font-size: 1rem; 
     font-weight: 500;
     color: #6b7280;
@@ -107,7 +107,7 @@
 }
 .size-btn:disabled {
     opacity: 0.4; cursor: not-allowed;
-    background-color: #f9fafb; border-color: #e5e7eb;
+    background-color: #f9fafb00; border-color: #00216431;
 }
 .stock-indicator {
     display: block; margin-top: 0.75rem;
@@ -116,7 +116,7 @@
 .action-buttons { 
     display: flex; 
     gap: 1rem; 
-    margin-top: -1rem; 
+    margin-top: 1rem; 
 }
 .add-to-cart-btn {
     flex-grow: 1; padding: 0.8rem 1.5rem; border-radius: 8px;
@@ -159,10 +159,6 @@
 .accordion-content p { margin: 0 0 1rem 0; }
 .accordion-content p:last-child { margin-bottom: 0; }
 
-.reviews-list .review-item { border-top: 1px solid #e5e7eb; padding: 1rem 0; }
-.reviews-list .review-item:first-child { border-top: none; }
-.reviews-list .review-item strong { margin-right: 0.5rem; }
-
 .page-center {
     display: flex; justify-content: center; align-items: center;
     height: 80vh; font-size: 1.5rem; color: #4b5563;
@@ -171,37 +167,83 @@
 .price-display { 
     display: flex; align-items: baseline; gap: 0.75rem; 
 }
-.discount-price1 { 
-    color: #ef4444; font-size: 1.75rem; font-weight: 600; margin-left: -26rem; 
+.discount-price6 { 
+    color: #ef4444; font-size: 1.75rem; font-weight: 600;
 }
-.original-price1 {
-     color: #6b7280; text-decoration: line-through; font-size: 1.25rem; 
+.original-price6 {
+     color: #6b7280; text-decoration: line-through; font-size: 1.25rem; margin-left: 10px; 
 }
 
+.reviews-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.review-item {
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+.review-item:last-of-type {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.review-author-rating {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.review-author {
+    font-weight: 600;
+    color: #111827;
+}
+
+.review-date {
+    font-size: 0.8rem;
+    color: #6b7280;
+    white-space: nowrap;
+}
+
+.review-comment {
+    margin: 0;
+    color: #4b5563;
+    line-height: 1.6;
+}
+
+.no-reviews-text {
+    color: #6b7280;
+    font-style: italic;
+    padding: 1rem 0;
+}
+
+/* --- Star Rating Styles for all contexts on this page --- */
 .star-rating-container {
     display: flex;
     align-items: center;
     gap: 0.1rem;
 }
-
 .star-icon {
-    width: 20px; 
-    height: 20px;
+    width: 16px; /* A good size for inline with text */
+    height: 16px;
 }
-
 .star-icon.filled {
-    color: darkgreen; 
+    color: #f59e0b; /* Consistent gold color */
 }
-
 .star-icon.empty {
-    color: #d1d5db; /* Light gray for empty stars */
+    color: #d1d5db;
 }
-
-/* Existing styles for context */
-.reviews-summary {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-    color: #4b5563;
+/* For the main summary, make the stars slightly larger */
+.reviews-summary .star-icon {
+    width: 20px;
+    height: 20px;
 }

@@ -177,20 +177,20 @@ const ProductDetailsPage = () => {
                     </div>
                     <p className="product-tags">{product.categories}</p>
                     
-                    <div className="product-price-container">
+                    <div className="product-price-container6">
                         {selectedVariant ? (
-                            <div className="price-display">
+                            <div className="price-display6">
                                 {selectedVariant.discount_price !== null && parseFloat(selectedVariant.discount_price) < parseFloat(selectedVariant.price) ? (
                                     <>
-                                        <span className="discount-price1">${parseFloat(selectedVariant.discount_price).toFixed(2)}</span>
-                                        <span className="original-price1">${parseFloat(selectedVariant.price).toFixed(2)}</span>
+                                        <span className="discount-price6">${parseFloat(selectedVariant.discount_price).toFixed(2)}</span>
+                                        <span className="original-price6">${parseFloat(selectedVariant.price).toFixed(2)}</span>
                                     </>
                                 ) : (
-                                    <p className="product-price-details">${parseFloat(selectedVariant.price).toFixed(2)}</p>
+                                    <p className="product-price-details6">${parseFloat(selectedVariant.price).toFixed(2)}</p>
                                 )}
                             </div>
                         ) : (
-                            <p className="price-placeholder">Select a size to see the price</p>
+                            <p className="price-placeholder6">Select a size to see the price</p>
                         )}
                     </div>
 
@@ -199,7 +199,7 @@ const ProductDetailsPage = () => {
                         <div className="size-buttons">
                             {SIZES.map(size => {
                                 const variant = variants.find(v => v.size === size);
-                                const isAvailable = !!variant;
+                                const isAvailable = variant && variant.stock_amt > 0;
                                 return (
                                     <button
                                         key={size}
@@ -251,7 +251,7 @@ const ProductDetailsPage = () => {
                     content={<p>Standard care instructions apply. Please check the product tag for details.</p>}
                 />
                 <AccordionItem
-                    title="Reviews"
+                    title={`Reviews (${reviews.length})`}
                     isOpen={activeAccordion === 2}
                     onClick={() => toggleAccordion(2)}
                     content={
@@ -259,12 +259,19 @@ const ProductDetailsPage = () => {
                             {reviews.length > 0 ? (
                                 reviews.map(review => (
                                     <div key={review.id} className="review-item">
-                                        <strong>{review.reviewer_username}</strong>
-                                        {renderStars(review.rating)}
-                                        <p>{review.comment}</p>
+                                        <div className="review-header">
+                                            <div className="review-author-rating">
+                                                <span className="review-author">{review.reviewer_username}</span>
+                                                {renderStars(review.rating)}
+                                            </div>
+                                            <span className="review-date">
+                                                {new Date(review.created_at).toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <p className="review-comment">{review.comment}</p>
                                     </div>
                                 ))
-                            ) : ( <p>No reviews yet.</p> )}
+                            ) : ( <p className="no-reviews-text">No reviews yet.</p> )}
                         </div>
                     }
                 />

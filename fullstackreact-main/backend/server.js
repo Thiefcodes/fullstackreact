@@ -1313,7 +1313,6 @@ app.get('/api/orders/:userId', async (req, res) => {
 app.get('/api/orders/details/:orderId', async (req, res) => {
     const { orderId } = req.params;
     try {
-        // Get order summary (this part is mostly the same)
         const orderQuery = `SELECT *, user_order_id FROM orders WHERE id = $1;`;
         const orderResult = await db.query(orderQuery, [orderId]);
         if (orderResult.rows.length === 0) {
@@ -1321,7 +1320,6 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
         }
         const orderSummary = orderResult.rows[0];
 
-        // Get line items for the order
         const itemsQuery = `SELECT * FROM order_items WHERE order_id = $1;`;
         const itemsResult = await db.query(itemsQuery, [orderId]);
         
@@ -1333,11 +1331,13 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
                     [item.purchased_item_id]
                 );
                 if (productRes.rows.length > 0) {
+                    // For marketplace items, the name is 'title'
                     lineItems.push({ ...item, ...productRes.rows[0], name: productRes.rows[0].title });
                 }
             } else if (item.item_type === 'shop') {
+                // THIS IS THE CRUCIAL FIX: We now fetch p.id as product_id
                 const productRes = await db.query(
-                    `SELECT p.product_name, p.image_urls, pv.size 
+                    `SELECT p.id as product_id, p.product_name, p.image_urls, pv.size 
                      FROM products p
                      JOIN product_variants pv ON p.id = pv.product_id
                      WHERE pv.id = $1`,
@@ -1345,11 +1345,12 @@ app.get('/api/orders/details/:orderId', async (req, res) => {
                 );
                 if (productRes.rows.length > 0) {
                     const details = productRes.rows[0];
+                    // For shop items, the name is 'product_name'
                     lineItems.push({
                         ...item,
                         ...details,
                         name: details.product_name,
-                        image_url: details.image_urls // Ensure consistent naming
+                        image_url: details.image_urls
                     });
                 }
             }
@@ -1477,6 +1478,61 @@ app.get('/api/reviews/seller/:sellerId', async (req, res) => {
     } catch (err) {
         console.error('Error fetching seller reviews:', err.message);
         res.status(500).json({ error: 'Server error while fetching reviews.' });
+    }
+});
+
+app.post('/api/unified-reviews', async (req, res) => {
+    const { orderId, userId, rating, comment, itemType, productId, sellerId } = req.body;
+
+    if (!orderId || !userId || !rating || !itemType || !productId) {
+        return res.status(400).json({ error: 'Missing required review information.' });
+    }
+
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+
+        if (itemType === 'shop') {
+            await client.query(
+                `INSERT INTO reviews (product_id, user_id, rating, comment) VALUES ($1, $2, $3, $4)`,
+                [productId, userId, rating, comment]
+            );
+        } else if (itemType === 'marketplace') {
+            if (!sellerId) {
+                return res.status(400).json({ error: 'Seller ID is required for marketplace reviews.' });
+            }
+            await client.query(
+                `INSERT INTO marketplace_reviews (order_id, buyer_id, seller_id, rating, comment) VALUES ($1, $2, $3, $4, $5)`,
+                [orderId, userId, sellerId, rating, comment]
+            );
+        } else {
+            throw new Error('Invalid item type for review.');
+        }
+
+        await client.query(
+            `UPDATE orders SET review_completed_at = NOW() WHERE id = $1 AND buyer_id = $2`,
+            [orderId, userId]
+        );
+
+        await client.query('COMMIT');
+
+        // --- NEW CODE: Broadcast a specific message after successful review ---
+        broadcast({
+            type: 'REVIEW_SUBMITTED',
+            orderId: parseInt(orderId, 10)
+        });
+        
+        res.status(201).json({ message: 'Review submitted successfully!' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        if (err.code === '23505') {
+            return res.status(409).json({ error: 'You have already submitted a review for this item.' });
+        }
+        console.error('Error submitting unified review:', err);
+        res.status(500).json({ error: 'Server error while submitting review.' });
+    } finally {
+        client.release();
     }
 });
 
