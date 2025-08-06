@@ -74,15 +74,54 @@ const App = () => {
   const [openDropdown, setOpenDropdown] = useState(null);
   const sellingBtnRef = useRef(null);
   const buyingBtnRef = useRef(null);
+  const [cartCount, setCartCount] = useState(0);
+
+  const refreshCartCount = async () => {
+    const userId = localStorage.getItem('userId');
+    if (!userId) return setCartCount(0);
+    const res = await fetch(`http://localhost:5000/api/cart/${userId}`);
+    if (res.ok) {
+      const data = await res.json();
+      setCartCount(data.length);
+    } else {
+      setCartCount(0);
+    }
+  };
 
   useEffect(() => {
-    async function fetchUser() {
-      if (!username) return;
-      const res = await fetch(`http://localhost:5000/api/users?username=${username}`);
-      if (res.ok) setUser(await res.json());
-    }
-    fetchUser();
-  }, [username]);
+    async function fetchUserAndCart() {
+      if (!username) {
+        setUser(null);
+        setCartCount(0);
+        return;
+      }
+      // Fetch user
+      const userRes = await fetch(`http://localhost:5000/api/users?username=${username}`);
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        setUser(userData);
+
+        // Fetch cart count (only if user is not staff)
+        if ((userData.type || userType) !== 'Staff') {
+          const userId = userData.id;
+          const cartRes = await fetch(`http://localhost:5000/api/cart/${userId}`);
+          if (cartRes.ok) {
+            const cartItems = await cartRes.json();
+            setCartCount(cartItems.length);
+          } else {
+            setCartCount(0);
+          }
+        } else {
+          setCartCount(0);
+        }
+      } else {
+        setUser(null);
+        setCartCount(0);
+      }
+    }
+    fetchUserAndCart();
+  }, [username, userType]);
+
 
   const handleLogout = () => {
     localStorage.removeItem('userId');
@@ -150,9 +189,15 @@ const App = () => {
                           </div>
 
                           <div className="navbar-usergroup">
-                              <Link to="/cart" className="navbar-cart-link">
-                                  <img src={CartImg} alt="Cart" className="navbar-cart-icon" />
-                              </Link>
+                              <div style={{ position: 'relative' }}>
+                                  <Link to="/cart" className="navbar-cart-link">
+                                      <img src={CartImg} alt="Cart" className="navbar-cart-icon" />
+                                      {cartCount > 0 && (
+                                          <span className="cart-badge">{cartCount}</span>
+                                      )}
+                                  </Link>
+                              </div>
+
                               <Link to="/profile" className="navbar-profile-link">
                                   <img
                                       src={user.profilepic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.firstname || user.username)}
@@ -224,7 +269,7 @@ const App = () => {
           <Route path="/profile"           element={<UserProfile />} />
           <Route path="/editprofile"       element={<EditProfile />} />
           <Route path="/changepassword"       element={<ChangePassword />} />
-         <Route path="/mixandmatch"            element={<MixAndMatch />} />
+          <Route path="/mixandmatch"            element={<MixAndMatch />} />
           <Route path="/order-success"   element={<OrderSuccessPage />} />
 
           {/* Admin / Staff */}
@@ -242,9 +287,9 @@ const App = () => {
           <Route path="/Ga4Admin"   element={<Ga4Admin />} />
 
           {/* Team */}
-        <Route path="/marketplace"     element={<MarketplacePage />} />
+              <Route path="/marketplace" element={<MarketplacePage refreshCartCount={refreshCartCount} />} />
         <Route path="/products/new"    element={<CreateProductPage />} />
-        <Route path="/cart"            element={<CartPage />} />
+        <Route path="/cart"            element={<CartPage refreshCartCount={refreshCartCount} />} />
         <Route path="/checkout"        element={<CheckoutPage />} />
         <Route path="/users/:userId"   element={<ViewUserProfile />} />
         <Route path="/user/:userId"    element={<PublicUserProfile />} />

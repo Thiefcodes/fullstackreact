@@ -10,7 +10,7 @@ const getSustainabilityColor = (score) => {
 
 // This is a simple component for displaying a single product card.
 // We can keep it in the same file for simplicity or move it to its own file later.
-const ProductCard = ({ product }) => {
+const ProductCard = ({ product, refreshCartCount }) => {
     const [isHovered, setIsHovered] = useState(false);
 
     const displayMediaUrl = (product.image_url && product.image_url.length > 0)
@@ -31,6 +31,10 @@ const ProductCard = ({ product }) => {
                 productId: product.id
             });
             alert(`'${product.title}' added to cart!`);
+
+            if (typeof refreshCartCount === "function") {
+                refreshCartCount();
+            }
         } catch (err) {
             console.error("Error adding to cart:", err);
             alert(err.response?.data?.error || 'Failed to add item to cart.');
@@ -158,7 +162,7 @@ const ProductCard = ({ product }) => {
     );
 };
 
-const MarketplacePage = () => {
+const MarketplacePage = ({ refreshCartCount }) => {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -313,7 +317,7 @@ const MarketplacePage = () => {
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
                 {products.length > 0 ? (
                     products.map(product => (
-                        <ProductCard key={product.id} product={product} />
+                        <ProductCard key={product.id} product={product} refreshCartCount={refreshCartCount} />
                     ))
                 ) : (
                     <p>No products available right now.</p>

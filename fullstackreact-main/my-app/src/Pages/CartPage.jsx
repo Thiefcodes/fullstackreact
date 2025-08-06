@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-const CartPage = () => {
+const CartPage = ({ refreshCartCount }) => {
     const [unifiedCart, setUnifiedCart] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -71,6 +71,10 @@ const CartPage = () => {
                 await axios.delete(`http://localhost:5000/api/shop/cart/${userId}/${item.id}`);
             }
             setUnifiedCart(prev => prev.filter(cartItem => cartItem.cart_item_id !== item.cart_item_id));
+            if (typeof refreshCartCount === "function") {
+                refreshCartCount();
+            }
+
         } catch (err) {
             console.error("Error removing from cart:", err);
             alert("Failed to remove item from cart.");
