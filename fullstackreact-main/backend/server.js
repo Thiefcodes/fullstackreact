@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { BetaAnalyticsDataClient } = require('@google-analytics/data');
 const express = require('express');
 const cors = require('cors');
 const { Client } = require('pg'); // [OLD CODE]
@@ -31,7 +32,7 @@ const paypalClient = new paypal.core.PayPalHttpClient(environment);
 app.use(cors());
 app.use(express.json());
 const { OpenAI } = require('openai');
-const openai = new OpenAI({ apiKey: "" });
+const openai = new OpenAI({ apiKey: "499880704" });
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -44,6 +45,34 @@ const transporter = nodemailer.createTransport({
 const db = new Pool({
   connectionString: "postgresql://postgres.nlquunjntkcatxdzgwtc:22062004Ee!1@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?pool_mode=session",
   ssl: { rejectUnauthorized: false }
+});
+
+
+const analyticsDataClient = new BetaAnalyticsDataClient({
+  keyFilename: "file path for secret key change here"
+});
+
+app.get('/api/ga4/pageviews', async (req, res) => {
+  console.log('===> /api/ga4/pageviews called!');
+  const propertyId = " change here";
+  try {
+    console.log('===> Attempting to call GA4...');
+    const [response] = await analyticsDataClient.runReport({
+      property: `properties/${propertyId}`,
+      dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
+      dimensions: [{ name: 'pagePath' }],
+      metrics: [{ name: 'screenPageViews' }]
+    });
+    console.log('===> GA4 call succeeded!');
+    const data = response.rows.map(row => ({
+      pagePath: row.dimensionValues[0].value,
+      views: row.metricValues[0].value
+    }));
+    res.json(data);
+  } catch (err) {
+    console.error('GA4 pageviews error:', err, err?.message, err?.stack);
+    res.status(500).json({ error: "Failed to fetch GA4 data", details: err?.message || err });
+  }
 });
 
 

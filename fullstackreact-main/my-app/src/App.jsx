@@ -7,7 +7,10 @@ import RegisterModal from './components/RegisterModal';
 import './app.css'
 import CartImg from './assets/cart-icon.png';
 import 'leaflet/dist/leaflet.css'; // <-- This line is correctly added
+import ReactGA from "react-ga4";
 
+import { useLocation } from "react-router-dom";
+ReactGA.initialize("G-7JL1ZGYBM4");
 // === Page Imports ===
 // Auth / Public
 import UserProfile   from './pages/UserProfile';
@@ -44,8 +47,21 @@ import EditProduct from './Pages/EditProduct';
 import AdminScan           from './Pages/AdminScan';
 import AdminPage           from './Pages/AdminPage';
 import AnalPage            from './Pages/AnalPage';
+import Ga4Admin          from './Pages/Ga4Admin';
 
 import Logo from "./assets/EcoThrift-logo.png";
+
+function GAListener() {
+  usePageViews();
+  return null;
+}
+
+function usePageViews() {
+  const location = useLocation();
+  useEffect(() => {
+    ReactGA.send({ hitType: "pageview", page: location.pathname + location.search });
+  }, [location]);
+}
 
 const App = () => {
   const isLoggedIn = !!localStorage.getItem('userId');
@@ -76,6 +92,8 @@ const App = () => {
 
   return (
     <Router>
+    <GAListener />
+        
           <nav className="main-navbar">
                   <img src={Logo} alt="Logo" className="navbar-logo" />
 
@@ -178,6 +196,9 @@ const App = () => {
                               <Link to="/AdminScan" className="navbar-link" onClick={() => setOpenDropdown(null)}>
                                   Admin scan dont remove this
                               </Link>
+                              <Link to="/Ga4Admin" className="navbar-link" onClick={() => setOpenDropdown(null)}>
+                                  Admin scan dont remove this
+                              </Link>
                           </div>
                           <div className="navbar-auth">
                               <button className="logout-btn" onClick={handleLogout}>Logout</button>
@@ -216,6 +237,7 @@ const App = () => {
           <Route path="/approvallisting"   element={<ApproveListing />} />
           <Route path="/products/edit/:id" element={<EditProduct />} />
           <Route path="/AdminScan"   element={<AdminScan />} />
+ <Route path="/Ga4Admin"   element={<Ga4Admin />} />
 
         {/* Team */}
         <Route path="/marketplace"     element={<MarketplacePage />} />
