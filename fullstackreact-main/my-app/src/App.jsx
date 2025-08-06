@@ -48,9 +48,6 @@ import AdminScan           from './Pages/AdminScan';
 import AdminPage           from './Pages/AdminPage';
 import AnalPage            from './Pages/AnalPage';
 import Ga4Admin          from './Pages/Ga4Admin';
-import AdminScan from './Pages/AdminScan';
-import AdminPage from './Pages/AdminPage';
-import AnalPage from './Pages/AnalPage';
 import AiDashboard from './Pages/AiDashboard';
 
 import Logo from "./assets/EcoThrift-logo.png";
