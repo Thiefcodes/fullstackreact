@@ -32,7 +32,7 @@ const paypalClient = new paypal.core.PayPalHttpClient(environment);
 app.use(cors());
 app.use(express.json());
 const { OpenAI } = require('openai');
-const openai = new OpenAI({ apiKey: "499880704" });
+const openai = new OpenAI({ apiKey: " change here" });
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -54,7 +54,7 @@ const analyticsDataClient = new BetaAnalyticsDataClient({
 
 app.get('/api/ga4/pageviews', async (req, res) => {
   console.log('===> /api/ga4/pageviews called!');
-  const propertyId = " change here";
+  const propertyId = "499880704";
   try {
     console.log('===> Attempting to call GA4...');
     const [response] = await analyticsDataClient.runReport({
