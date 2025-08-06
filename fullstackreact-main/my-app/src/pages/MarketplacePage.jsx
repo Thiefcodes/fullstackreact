@@ -213,7 +213,7 @@ const ProductCard = ({ product, refreshCartCount }) => {
 
 
 
-const MarketplacePage = () => {
+const MarketplacePage = ({ refreshCartCount }) => {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
