@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
-import '../Styles/OrderDetailsPage.css';
+import '../Styles/OrderDetailsPage.css'; // This component uses the same styles
 
-// ReviewModal is now simpler: it doesn't trigger a refetch directly.
-const ReviewModal = ({ item, orderId, onClose }) => {
+// --- Reusable Review Modal Component ---
+const ReviewModal = ({ item, orderId, onClose, onReviewSubmitted }) => {
     const [rating, setRating] = useState(5);
     const [hoverRating, setHoverRating] = useState(0);
     const [comment, setComment] = useState('');
@@ -28,9 +28,9 @@ const ReviewModal = ({ item, orderId, onClose }) => {
         };
 
         try {
-            const response = await axios.post('http://localhost:5000/api/unified-reviews', payload);
+            await axios.post('http://localhost:5000/api/unified-reviews', payload);
             alert('Review submitted successfully!');
-            // The WebSocket will now handle the state update.
+            onReviewSubmitted();
             onClose();
         } catch (err) {
             console.error("Error submitting review:", err);
@@ -102,13 +102,9 @@ const OrderDelivery = () => {
         };
         ws.onmessage = (event) => {
             const message = JSON.parse(event.data);
-            
-            // Handle delivery status updates from the simulation
             if (message.type === 'ORDER_STATUS_UPDATE' && message.order) {
                 setOrder(prevOrder => ({ ...prevOrder, summary: message.order }));
             }
-
-            // --- NEW LOGIC: Handle review submission update ---
             if (message.type === 'REVIEW_SUBMITTED' && message.orderId === parseInt(orderId, 10)) {
                 console.log('Review submission confirmed via WebSocket, refetching details...');
                 fetchOrderDetails();
@@ -146,10 +142,7 @@ const OrderDelivery = () => {
                     item={reviewingItem} 
                     orderId={orderId}
                     onClose={() => setReviewingItem(null)}
-                    onReviewSubmitted={() => {
-                        // The modal no longer needs to do anything here,
-                        // but we keep the prop for clarity.
-                    }}
+                    onReviewSubmitted={() => { /* WebSocket handles the refetch */ }}
                 />
             )}
             <div className="order-summary-box">
@@ -164,9 +157,12 @@ const OrderDelivery = () => {
             <div style={{ display: 'flex', gap: '40px' }}>
                 <div style={{ flex: 1 }}>
                     <h3>Delivery Status</h3>
+                    {/* --- RESTORED TIMELINE --- */}
                     <TimelineStep title="Order Placed" timestamp={order.summary.ordered_at} isCompleted={!!order.summary.ordered_at} />
                     <TimelineStep title="Shipped" timestamp={order.summary.shipped_at} isCompleted={!!order.summary.shipped_at} />
-                    <TimelineStep title="Delivered" timestamp={order.summary.delivered_at} isCompleted={isDelivered} isLast={true} />
+                    <TimelineStep title="Delivered" timestamp={order.summary.delivered_at} isCompleted={isDelivered} />
+                    <TimelineStep title="In Review" timestamp={order.summary.review_started_at} isCompleted={isDelivered} />
+                    <TimelineStep title="Review Completed" timestamp={order.summary.review_completed_at} isCompleted={isReviewCompleted} isLast={true} />
                 </div>
                 <div style={{ flex: 2 }}>
                     <h3>Items in this Order</h3>
