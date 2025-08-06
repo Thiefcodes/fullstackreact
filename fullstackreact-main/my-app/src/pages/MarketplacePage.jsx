@@ -12,36 +12,26 @@ const getSustainabilityColor = (score) => {
 // We can keep it in the same file for simplicity or move it to its own file later.
 const ProductCard = ({ product }) => {
     const [isHovered, setIsHovered] = useState(false);
+    const [mediaIndex, setMediaIndex] = useState(0);
+    const [sustainabilityScore, setSustainabilityScore] = useState(null);
 
-    const displayMediaUrl = (product.image_url && product.image_url.length > 0)
-        ? product.image_url[0]
-        : `https://placehold.co/600x400/EEE/31343C?text=No+Image`;
+    const mediaUrls = product.image_url?.length > 0 ? product.image_url : [];
+    const currentMedia = mediaUrls[mediaIndex] || 'https://placehold.co/600x400/EEE/31343C?text=No+Image';
 
     const isVideo = (url) => url.match(/\.(mp4|webm|ogg)$/i);
 
-    const handleAddToCart = async () => {
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            alert('Please log in to add items to your cart.');
-            return;
+    useEffect(() => {
+        if (mediaUrls.length > 1) {
+            const interval = setInterval(() => {
+                setMediaIndex((prevIndex) => (prevIndex + 1) % mediaUrls.length);
+            }, 5000);
+            return () => clearInterval(interval);
         }
-        try {
-            await axios.post('http://localhost:5000/api/cart', {
-                userId: userId,
-                productId: product.id
-            });
-            alert(`'${product.title}' added to cart!`);
-        } catch (err) {
-            console.error("Error adding to cart:", err);
-            alert(err.response?.data?.error || 'Failed to add item to cart.');
-        }
-    };
-
-    const [sustainabilityScore, setSustainabilityScore] = useState(null);
+    }, [mediaUrls]);
 
     useEffect(() => {
         const fetchOrAnalyzeSustainabilityScore = async () => {
-            const imageUrl = product.image_url?.[0];
+            const imageUrl = mediaUrls[0];
             if (!imageUrl || !product.id) return;
 
             try {
@@ -67,6 +57,24 @@ const ProductCard = ({ product }) => {
         fetchOrAnalyzeSustainabilityScore();
     }, [product.id]);
 
+    const handleAddToCart = async () => {
+        const userId = localStorage.getItem('userId');
+        if (!userId) {
+            alert('Please log in to add items to your cart.');
+            return;
+        }
+        try {
+            await axios.post('http://localhost:5000/api/cart', {
+                userId: userId,
+                productId: product.id
+            });
+            alert(`'${product.title}' added to cart!`);
+        } catch (err) {
+            console.error("Error adding to cart:", err);
+            alert(err.response?.data?.error || 'Failed to add item to cart.');
+        }
+    };
+
     return (
         <div
             onMouseEnter={() => setIsHovered(true)}
@@ -89,19 +97,67 @@ const ProductCard = ({ product }) => {
                 cursor: 'pointer',
             }}
         >
-            {isVideo(displayMediaUrl) ? (
-                <video src={displayMediaUrl} style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '12px' }} controls muted loop />
+            {/* Media Preview */}
+            {isVideo(currentMedia) ? (
+                <video
+                    src={currentMedia}
+                    style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '12px' }}
+                    muted
+                    autoPlay
+                    loop
+                />
             ) : (
-                <img src={displayMediaUrl} alt={product.title} style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '12px' }} />
+                <img
+                    src={currentMedia}
+                    alt={product.title}
+                    style={{
+                        width: '100%',
+                        height: '180px',
+                        objectFit: 'cover',
+                        borderRadius: '12px',
+                        transition: 'opacity 0.5s ease-in-out'
+                    }}
+                />
             )}
 
+            {/* Dot Navigation */}
+            {mediaUrls.length > 1 && (
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginTop: '8px',
+                    gap: '6px'
+                }}>
+                    {mediaUrls.map((_, idx) => (
+                        <span
+                            key={idx}
+                            onClick={() => setMediaIndex(idx)}
+                            style={{
+                                width: '10px',
+                                height: '10px',
+                                borderRadius: '50%',
+                                backgroundColor: idx === mediaIndex ? '#15342D' : '#ccc',
+                                cursor: 'pointer',
+                                transition: 'background-color 0.3s'
+                            }}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {/* Product Details */}
             <h3 style={{ fontSize: '1.2rem', marginTop: '12px', color: '#15342D' }}>{product.title}</h3>
             <p style={{ fontWeight: 'bold', fontSize: '1.1rem', margin: '4px 0', color: '#333' }}>${product.price}</p>
             <p style={{ color: '#666', margin: '4px 0' }}>Size: {product.size || 'N/A'}</p>
             <p style={{ fontSize: '0.9em', color: '#999' }}>
-                Sold by: <Link to={`/user/${product.seller_id}`} style={{ color: '#15342D', fontWeight: 'bold', textDecoration: 'none' }}>{product.seller_name}</Link>
+                Sold by:{' '}
+                <Link to={`/user/${product.seller_id}`} style={{ color: '#15342D', fontWeight: 'bold', textDecoration: 'none' }}>
+                    {product.seller_name}
+                </Link>
             </p>
 
+            {/* Sustainability Score Badge */}
             {sustainabilityScore && (
                 <div style={{
                     position: 'absolute',
@@ -132,6 +188,7 @@ const ProductCard = ({ product }) => {
                 </div>
             )}
 
+            {/* Add to Cart */}
             <button
                 onClick={handleAddToCart}
                 style={{
@@ -153,6 +210,8 @@ const ProductCard = ({ product }) => {
         </div>
     );
 };
+
+
 
 const MarketplacePage = () => {
     const [products, setProducts] = useState([]);
