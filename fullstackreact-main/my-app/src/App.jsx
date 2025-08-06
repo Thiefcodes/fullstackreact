@@ -29,16 +29,18 @@ import EcommercePage       from './pages/EcommercePage';
 import ProductDetailsPage  from './pages/ProductDetailsPage';
 import WishlistPage            from './pages/WishlistPage';
 // Admin / Staff
-import UserManagement     from './pages/UserManagement';
-import ProductManagement   from './Pages/ProductManagement';
+import UserManagement from './pages/UserManagement';
+import ProductManagement from './Pages/ProductManagement';
 import InventoryManagement from './Pages/InventoryManagement';
-import CreateProduct       from './Pages/CreateProduct';
-import StockUp             from './Pages/StockUp';
-import ApproveListing     from './pages/ApproveListing';
+import CreateProduct from './Pages/CreateProduct';
+import StockUp from './Pages/StockUp';
+import ApproveListing from './pages/ApproveListing';
 import EditProduct from './Pages/EditProduct';
-import AdminScan           from './Pages/AdminScan';
-import AdminPage           from './Pages/AdminPage';
-import AnalPage            from './Pages/AnalPage';
+import AdminScan from './Pages/AdminScan';
+import AdminPage from './Pages/AdminPage';
+import AnalPage from './Pages/AnalPage';
+import AiDashboard from './Pages/AiDashboard'; // <-- The new import
+
 
 import Logo from "./assets/EcoThrift-logo.png";
 
@@ -196,6 +198,7 @@ const App = () => {
           <Route path="/approvallisting"   element={<ApproveListing />} />
           <Route path="/products/edit/:id" element={<EditProduct />} />
           <Route path="/AdminScan"   element={<AdminScan />} />
+          <Route path="/admin/ai" element={<AiDashboard />} /> {/* <-- Add this new route */}
 
           {/* Fallback */}
           <Route path="*" element={<div style={{ padding: '2rem' }}><h2>404 — Not Found</h2></div>} />
